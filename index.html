@@ -164,7 +164,9 @@
    signed-in team members can read or write data.                       */
 window.KIRU_CONFIG = {
   SUPABASE_URL: "https://mfthkjtoggofjjmwyekt.supabase.co",
-  SUPABASE_ANON_KEY: "sb_publishable_la6NVRk4WPj5e4FDNB_rMQ_ArsAf3jV"
+  SUPABASE_ANON_KEY: "sb_publishable_la6NVRk4WPj5e4FDNB_rMQ_ArsAf3jV",
+  ALLOWED_DOMAIN: "ourkiru.com",
+  TEAM_ACCESS_CODE: "KIRU-STORES-2026"
 };
 </script>
 </head>
@@ -175,9 +177,25 @@ window.KIRU_CONFIG = {
     <h3 style="margin-top:14px">Inventory Management System</h3>
     <div class="sub">Sign in with your Kiru team account.</div>
     <div id="gateWarn"></div>
-    <div class="mb"><span class="lab">Email</span><input type="email" id="g_email" autocomplete="username"></div>
-    <div class="mb"><span class="lab">Password</span><input type="password" id="g_pass" autocomplete="current-password"></div>
-    <button class="btn" id="g_in" style="width:100%">Sign in</button>
+    <!-- tab switcher -->
+    <div style="display:flex;gap:0;margin-bottom:18px;border:1px solid var(--line);border-radius:10px;overflow:hidden">
+      <button id="tab_signin" onclick="gateTab('signin')" style="flex:1;font-family:inherit;font-size:.82rem;font-weight:700;padding:9px 0;border:none;cursor:pointer;background:var(--navy);color:#fff;transition:background .15s">Sign in</button>
+      <button id="tab_signup" onclick="gateTab('signup')" style="flex:1;font-family:inherit;font-size:.82rem;font-weight:700;padding:9px 0;border:none;cursor:pointer;background:var(--card-bg);color:var(--muted);transition:background .15s">Create account</button>
+    </div>
+    <!-- sign-in panel -->
+    <div id="panel_signin">
+      <div class="mb"><span class="lab">Email</span><input type="email" id="g_email" autocomplete="username"></div>
+      <div class="mb"><span class="lab">Password</span><input type="password" id="g_pass" autocomplete="current-password"></div>
+      <button class="btn" id="g_in" style="width:100%">Sign in</button>
+    </div>
+    <!-- create account panel -->
+    <div id="panel_signup" style="display:none">
+      <div class="mb"><span class="lab">Work email <small>(@ourkiru.com only)</small></span><input type="email" id="su_email" autocomplete="username"></div>
+      <div class="mb"><span class="lab">Password</span><input type="password" id="su_pass" autocomplete="new-password"></div>
+      <div class="mb"><span class="lab">Confirm password</span><input type="password" id="su_pass2" autocomplete="new-password"></div>
+      <div class="mb"><span class="lab">Team access code</span><input type="text" id="su_code" autocomplete="off" placeholder="Ask your manager"></div>
+      <button class="btn" id="g_up" style="width:100%">Create account</button>
+    </div>
     <div id="gateMsg" class="gatemsg"></div>
   </div>
 </div>
@@ -341,6 +359,9 @@ function subscribeLive(){
 document.addEventListener("DOMContentLoaded",()=>{
   $("g_in").addEventListener("click",signIn);
   $("g_pass").addEventListener("keydown",e=>{if(e.key==="Enter")signIn();});
+  $("g_up").addEventListener("click",signUp);
+  $("su_pass2").addEventListener("keydown",e=>{if(e.key==="Enter")signUp();});
+  $("su_code").addEventListener("keydown",e=>{if(e.key==="Enter")signUp();});
   $("signOut").addEventListener("click",async()=>{await SB.auth.signOut();location.reload();});
   boot();
 });
@@ -352,6 +373,44 @@ async function signIn(){
   if(error){$("gateMsg").textContent=error.message;return;}
   $("gateMsg").textContent="";
   await onSignedIn(data.user);
+}
+
+function gateTab(which){
+  const isSignin=which==="signin";
+  $("panel_signin").style.display=isSignin?"":"none";
+  $("panel_signup").style.display=isSignin?"none":"";
+  $("tab_signin").style.background=isSignin?"var(--navy)":"var(--card-bg)";
+  $("tab_signin").style.color=isSignin?"#fff":"var(--muted)";
+  $("tab_signup").style.background=isSignin?"var(--card-bg)":"var(--navy)";
+  $("tab_signup").style.color=isSignin?"var(--muted)":"#fff";
+  $("gateMsg").textContent="";
+}
+
+async function signUp(){
+  const cfg=window.KIRU_CONFIG||{};
+  const allowedDomain=(cfg.ALLOWED_DOMAIN||"ourkiru.com").toLowerCase();
+  const correctCode=(cfg.TEAM_ACCESS_CODE||"KIRU-STORES-2026");
+  const email=$("su_email").value.trim().toLowerCase();
+  const pass=$("su_pass").value;
+  const pass2=$("su_pass2").value;
+  const code=$("su_code").value.trim();
+  if(!email||!pass||!pass2||!code){$("gateMsg").textContent="Please fill in all fields";return;}
+  if(!email.endsWith("@"+allowedDomain)){$("gateMsg").textContent="Sign-up is restricted to @"+allowedDomain+" email addresses";return;}
+  if(pass.length<8){$("gateMsg").textContent="Password must be at least 8 characters";return;}
+  if(pass!==pass2){$("gateMsg").textContent="Passwords do not match";return;}
+  if(code!==correctCode){$("gateMsg").textContent="Team access code is incorrect";return;}
+  $("gateMsg").textContent="Creating account…";
+  const {data,error}=await SB.auth.signUp({email,password:pass});
+  if(error){$("gateMsg").textContent=error.message;return;}
+  if(data.user&&data.session){
+    $("gateMsg").textContent="";
+    await onSignedIn(data.user);
+  } else {
+    $("gateMsg").style.color="var(--green)";
+    $("gateMsg").textContent="Account created! Check your email to confirm, then sign in.";
+    gateTab("signin");
+    $("gateMsg").style.color="var(--green)";
+  }
 }
 
 /* ============ THEME & TABS ============ */
