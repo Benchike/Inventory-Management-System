@@ -572,10 +572,9 @@ function renderLines(kind){
   });
   c.querySelectorAll("select,input").forEach(el=>el.addEventListener("input",e=>{
     const i=+e.target.dataset.i,f=e.target.dataset.f;
-    if(f==="cost"){fmtCommasEl(e.target);draft.lines[i].cost=parseFloat(e.target.value.replace(/,/g,""))||0;}
-    else if(f==="qty"){draft.lines[i].qty=parseFloat(e.target.value)||0;}
-    else{ draft.lines[i].itemId=e.target.value; const it=itemById(e.target.value); if(it&&showCost&&!draft.lines[i].cost)draft.lines[i].cost=it.cost||0; }
-    renderLines(kind); updateDocTotal(kind);
+    if(f==="cost"){fmtCommasEl(e.target);draft.lines[i].cost=parseFloat(e.target.value.replace(/,/g,""))||0; updateDocTotal(kind);}
+    else if(f==="qty"){draft.lines[i].qty=parseFloat(e.target.value)||0; updateDocTotal(kind);}
+    else{ draft.lines[i].itemId=e.target.value; const it=itemById(e.target.value); if(it&&showCost&&!draft.lines[i].cost)draft.lines[i].cost=it.cost||0; renderLines(kind); updateDocTotal(kind); }
   }));
   c.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{draft.lines.splice(+b.dataset.del,1);renderLines(kind);updateDocTotal(kind);}));
   updateDocTotal(kind);
@@ -583,22 +582,14 @@ function renderLines(kind){
 function docTotal(){return draft.lines.reduce((s,l)=>s+(l.qty||0)*(l.cost||0),0);}
 function updateDocTotal(kind){const el=$("docTotal"); if(el) el.textContent= kind==="po"? ngn.format(docTotal()) : `${draft.lines.length} line${draft.lines.length===1?'':'s'}`;}
 function sigBlock(){
-  return `<div class="row2 mb"><div><span class="lab">Prepared / raised by</span><input id="d_prep" value="${esc(draft.preparedBy||"")}"></div>
-      <div><span class="lab">Approved by</span><input id="d_appr" value="${esc(draft.approvedBy||"")}"></div></div>
-    <div class="mb"><span class="lab">Approver title</span><input id="d_title" value="${esc(draft.approverTitle||"")}"></div>
-    <div class="mb"><span class="lab">Approver signature <small>(upload — required to authorise)</small></span>
-      <label class="upbtn">Upload signature<input type="file" id="d_sig" accept="image/*" style="display:none"></label>
-      <img id="d_sigThumb" class="upthumb ${draft.sig?'show':''}" src="${draft.sig||''}"></div>`;
+  return `<div class="row2 mb">
+      <div><span class="lab">Approved by</span><input id="d_appr" value="${esc(draft.approvedBy||"")}"></div>
+      <div><span class="lab">Approver title</span><input id="d_title" value="${esc(draft.approverTitle||"")}"></div>
+    </div>`;
 }
 function wireSig(){
-  $("d_sig").addEventListener("change",e=>{
-    const f=e.target.files[0]; if(!f)return;
-    const r=new FileReader();
-    r.onload=()=>processSignature(r.result,out=>{draft.sig=out;const t=$("d_sigThumb");t.src=out;t.classList.add("show");});
-    r.readAsDataURL(f);
-  });
-  ["d_prep","d_appr","d_title"].forEach(id=>$(id).addEventListener("input",e=>{
-    draft[{d_prep:"preparedBy",d_appr:"approvedBy",d_title:"approverTitle"}[id]]=e.target.value;
+  ["d_appr","d_title"].forEach(id=>$(id)&&$(id).addEventListener("input",e=>{
+    draft[{d_appr:"approvedBy",d_title:"approverTitle"}[id]]=e.target.value;
   }));
 }
 
@@ -680,7 +671,7 @@ function poForm(){
     const lines=draft.lines.filter(l=>l.itemId&&(l.qty||0)>0);
     if(!lines.length){toast("Add at least one item line");return;}
     if(!draft.supplier.trim()){toast("Enter the supplier");return;}
-    if(!draft.approvedBy.trim()||!draft.sig){toast("Approver name and signature are required");return;}
+    if(!draft.approvedBy.trim()){toast("Approver name is required");return;}
     draft.lines=lines;
     const no=await saveDocDB("po",draft);
     if(no){toast("Purchase order "+no+" saved"); draft=null; viewPO();}
@@ -758,7 +749,7 @@ function mroForm(){
     const lines=draft.lines.filter(l=>l.itemId&&(l.qty||0)>0);
     if(!lines.length){toast("Add at least one item line");return;}
     if(!draft.requestedBy.trim()){toast("Enter who is requesting");return;}
-    if(!draft.approvedBy.trim()||!draft.sig){toast("Approver name and signature are required");return;}
+    if(!draft.approvedBy.trim()){toast("Approver name is required");return;}
     draft.lines=lines;
     const no=await saveDocDB("mro",draft);
     if(no){toast("Requisition "+no+" saved"); draft=null; viewMRO();}
@@ -785,8 +776,7 @@ function docHead(title,metaHTML){
 function docFoot(){return `<div class="doc-foot">${CO.name} · ${CO.email} · ${CO.phone} · ${CO.addr} · ${CO.web}</div>`;}
 function signBlock(d,roleLabel){
   return `<div class="doc-sign">
-      <div class="doc-note">${d.note?`<div class="h">Notes</div>${esc(d.note)}`:""}
-        ${d.preparedBy?`<div class="h" style="margin-top:${d.note?'12px':'0'}">Raised by</div>${esc(d.preparedBy)}`:""}</div>
+      <div class="doc-note">${d.note?`<div class="h">Notes</div>${esc(d.note)}`:""}</div>
       <div class="doc-sg"><div class="h">${roleLabel}</div>
         <div class="slot">${d.sig?`<img src="${d.sig}" alt="signature">`:""}</div>
         <div class="ln">${esc(d.approvedBy||"—")}<div class="rl">${d.approverTitle?esc(d.approverTitle)+" · ":""}${CO.name}</div></div>
