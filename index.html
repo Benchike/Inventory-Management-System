@@ -287,7 +287,7 @@ function docToLocal(d){
     preparedBy:d.prepared_by||"",approvedBy:d.approved_by||"",approverTitle:d.approver_title||"",
     sig:d.signature||"",status:d.status,createdBy:d.created_by||""};
   if(d.kind==="po")return Object.assign(base,{supplier:d.supplier||"",receivedDate:d.applied_date,paymentReceipt:d.payment_receipt||""});
-  return Object.assign(base,{requestedBy:d.requested_by||"",project:d.project||"",issuedDate:d.applied_date});
+  return Object.assign(base,{requestedBy:d.requested_by||"",project:d.project||"",purpose:d.purpose||"",issuedDate:d.applied_date});
 }
 async function pull(){
   const [ir,dr]=await Promise.all([
@@ -321,7 +321,7 @@ async function saveDocDB(kind,d){
   const row={kind,no:noData,doc_date:d.date,status:"draft",note:d.note||"",lines:d.lines,
     prepared_by:d.preparedBy||"",approved_by:d.approvedBy||"",approver_title:d.approverTitle||"",
     signature:d.sig||"",created_by:(USER&&USER.email)||""};
-  if(kind==="po")row.supplier=d.supplier||""; else {row.requested_by=d.requestedBy||"";row.project=d.project||"";}
+  if(kind==="po")row.supplier=d.supplier||""; else {row.requested_by=d.requestedBy||"";row.project=d.project||"";row.purpose=d.purpose||"";}
   const {error}=await SB.from("documents").insert(row);
   if(error){toast("Save failed: "+error.message);return null;}
   await pull(); return noData;
@@ -692,9 +692,10 @@ function viewMRO(){
         <div><h3>Material Requisition Orders</h3><div class="sub" style="margin:0">Issuing a requisition removes its items from stock.</div></div>
         <button class="btn" id="newMRO">+ Create requisition</button>
       </div>
-      ${DB.mros.length?`<table class="grid"><thead><tr><th class="l">MRO No.</th><th class="l">Requested by</th><th class="l">Project / site</th><th class="l">Date</th><th>Lines</th><th class="c">Status</th><th class="c">Actions</th></tr></thead><tbody>
+      ${DB.mros.length?`<table class="grid"><thead><tr><th class="l">MRO No.</th><th class="l">Requested by</th><th class="l">Customer Name</th><th class="l">Purpose</th><th class="l">Date</th><th>Lines</th><th class="c">Status</th><th class="c">Actions</th></tr></thead><tbody>
         ${DB.mros.slice().reverse().map(m=>`<tr>
           <td class="l">${esc(m.no)}</td><td class="l" style="font-weight:500">${esc(m.requestedBy||"—")}</td><td class="l" style="font-weight:500">${esc(m.project||"—")}</td>
+          <td class="l" style="font-weight:500">${esc(m.purpose||"—")}</td>
           <td class="l" style="font-weight:500">${fmtDate(m.date)}</td><td>${m.lines.length}</td>
           <td class="c"><span class="pill ${m.status==='issued'?'done':'draft'}">${m.status==='issued'?'ISSUED':'DRAFT'}</span></td>
           <td class="c"><div class="btnrow" style="justify-content:center">
@@ -707,7 +708,7 @@ function viewMRO(){
     </div>`;
   $("newMRO").addEventListener("click",()=>{
     if(!DB.items.length){toast("Add stock items first");return;}
-    draft={kind:"mro",id:uid(),no:"",date:today(),requestedBy:"",project:"",note:"",lines:[{itemId:"",qty:1,cost:0}],preparedBy:"",approvedBy:"",approverTitle:"",sig:null};
+    draft={kind:"mro",id:uid(),no:"",date:today(),requestedBy:"",project:"",purpose:"",note:"",lines:[{itemId:"",qty:1,cost:0}],preparedBy:"",approvedBy:"",approverTitle:"",sig:null};
     viewMRO();
   });
   $("view").querySelectorAll("[data-issue]").forEach(b=>b.addEventListener("click",()=>issueMRO(b.dataset.issue)));
@@ -728,7 +729,13 @@ function mroForm(){
         <h3>Create requisition</h3><div class="sub">Stock reduces only when you mark the requisition issued.</div>
         <div class="row2 mb"><div><span class="lab">Date</span><input type="date" id="d_date" value="${draft.date}"></div>
           <div><span class="lab">Requested by</span><input id="d_req" value="${esc(draft.requestedBy)}"></div></div>
-        <div class="mb"><span class="lab">Project / site / purpose</span><input id="d_proj" value="${esc(draft.project)}"></div>
+        <div class="mb"><span class="lab">Customer Name</span><input id="d_proj" value="${esc(draft.project)}"></div>
+        <div class="mb"><span class="lab">Purpose</span>
+          <select id="d_purpose">
+            <option value="">— select —</option>
+            <option value="New Project" ${draft.purpose==="New Project"?"selected":""}>New Project</option>
+            <option value="Maintenance" ${draft.purpose==="Maintenance"?"selected":""}>Maintenance</option>
+          </select></div>
         <div class="mb"><span class="lab">Note <small>(optional)</small></span><textarea id="d_note">${esc(draft.note)}</textarea></div>
         ${sigBlock()}
         <div class="btnrow"><button class="btn" id="d_save">Save requisition</button><button class="btn ghost" id="d_cancel">Cancel</button></div>
@@ -742,6 +749,7 @@ function mroForm(){
   $("d_date").addEventListener("input",e=>draft.date=e.target.value);
   $("d_req").addEventListener("input",e=>draft.requestedBy=e.target.value);
   $("d_proj").addEventListener("input",e=>draft.project=e.target.value);
+  $("d_purpose").addEventListener("change",e=>draft.purpose=e.target.value);
   $("d_note").addEventListener("input",e=>draft.note=e.target.value);
   $("addLine").addEventListener("click",()=>{draft.lines.push({itemId:"",qty:1,cost:0});renderLines("mro");});
   $("d_cancel").addEventListener("click",()=>{draft=null;viewMRO();});
@@ -809,7 +817,8 @@ function docHTML_MRO(m){
     ${docHead("MATERIAL REQUISITION",`<b>MRO No:</b> ${esc(m.no)}<br><b>Date:</b> ${fmtDate(m.date)}${m.issuedDate?`<br><b>Issued:</b> ${fmtDate(m.issuedDate)}`:""}<br><b>Status:</b> ${m.status==="issued"?"Issued from stock":"Awaiting issue"}`)}
     <div class="doc-parties">
       <div class="doc-party"><div class="h">Requested by</div><div class="v">${esc(m.requestedBy||"—")}</div></div>
-      <div class="doc-party"><div class="h">Project / site</div><div class="v">${esc(m.project||"—")}</div></div>
+      <div class="doc-party"><div class="h">Customer Name</div><div class="v">${esc(m.project||"—")}</div></div>
+      <div class="doc-party"><div class="h">Purpose</div><div class="v">${esc(m.purpose||"—")}</div></div>
       <div class="doc-party"><div class="h">Issued from</div><div class="v">${CO.name}</div><div class="s">${CO.addr}</div></div>
     </div>
     <table class="doc"><colgroup><col style="width:30px"><col><col style="width:130px"><col style="width:60px"><col style="width:70px"></colgroup>

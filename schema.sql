@@ -34,12 +34,14 @@ create table if not exists public.documents (
   signature      text default '',                    -- data URL
   applied_date      date,                               -- received / issued date
   payment_receipt   text default '',                    -- data URL of uploaded payment receipt (PO only)
+  purpose           text default '',                    -- MRO purpose: New Project | Maintenance
   created_by        text default '',
   created_at        timestamptz default now()
 );
 
--- Add payment_receipt to existing deployments (safe to re-run)
+-- Add new columns to existing deployments (safe to re-run)
 alter table public.documents add column if not exists payment_receipt text default '';
+alter table public.documents add column if not exists purpose text default '';
 
 create table if not exists public.counters (
   kind  text primary key,
