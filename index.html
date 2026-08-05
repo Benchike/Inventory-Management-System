@@ -166,7 +166,8 @@ window.KIRU_CONFIG = {
   SUPABASE_URL: "https://mfthkjtoggofjjmwyekt.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_la6NVRk4WPj5e4FDNB_rMQ_ArsAf3jV",
   ALLOWED_DOMAIN: "ourkiru.com",
-  TEAM_ACCESS_CODE: "KIRU-STORES-2026"
+  TEAM_ACCESS_CODE: "KIRU-STORES-2026",
+  ADMIN_EMAIL: "benokpala@ourkiru.com"
 };
 </script>
 </head>
@@ -285,7 +286,7 @@ function docToLocal(d){
   const base={id:d.id,no:d.no,date:d.doc_date,note:d.note||"",lines:d.lines||[],
     preparedBy:d.prepared_by||"",approvedBy:d.approved_by||"",approverTitle:d.approver_title||"",
     sig:d.signature||"",status:d.status,createdBy:d.created_by||""};
-  if(d.kind==="po")return Object.assign(base,{supplier:d.supplier||"",receivedDate:d.applied_date});
+  if(d.kind==="po")return Object.assign(base,{supplier:d.supplier||"",receivedDate:d.applied_date,paymentReceipt:d.payment_receipt||""});
   return Object.assign(base,{requestedBy:d.requested_by||"",project:d.project||"",issuedDate:d.applied_date});
 }
 async function pull(){
@@ -330,6 +331,17 @@ async function applyDocDB(id){
   if(error){toast("Failed: "+error.message);return false;}
   await pull(); return true;
 }
+async function uploadReceiptDB(id,dataUrl){
+  const {error}=await SB.from("documents").update({payment_receipt:dataUrl}).eq("id",id);
+  if(error){toast("Upload failed: "+error.message);return false;}
+  await pull(); return true;
+}
+async function deleteDocDB(id){
+  const {error}=await SB.from("documents").delete().eq("id",id);
+  if(error){toast("Delete failed: "+error.message);return false;}
+  await pull(); return true;
+}
+function isAdmin(){return USER&&USER.email===(window.KIRU_CONFIG.ADMIN_EMAIL||"").toLowerCase();}
 
 /* ============ AUTH ============ */
 async function boot(){
@@ -599,15 +611,21 @@ function viewPO(){
         <div><h3>Purchase Orders</h3><div class="sub" style="margin:0">Receiving a purchase order adds its items to stock.</div></div>
         <button class="btn" id="newPO">+ Create purchase order</button>
       </div>
-      ${DB.pos.length?`<table class="grid"><thead><tr><th class="l">PO No.</th><th class="l">Supplier</th><th class="l">Date</th><th>Lines</th><th>Value</th><th class="c">Status</th><th class="c">Actions</th></tr></thead><tbody>
+      ${DB.pos.length?`<table class="grid"><thead><tr><th class="l">PO No.</th><th class="l">Supplier</th><th class="l">Date</th><th>Lines</th><th>Value</th><th class="c">Receipt</th><th class="c">Status</th><th class="c">Actions</th></tr></thead><tbody>
         ${DB.pos.slice().reverse().map(p=>`<tr>
           <td class="l">${esc(p.no)}</td><td class="l" style="font-weight:500">${esc(p.supplier||"—")}</td><td class="l" style="font-weight:500">${fmtDate(p.date)}</td>
           <td>${p.lines.length}</td><td>${ngn.format(p.lines.reduce((s,l)=>s+(l.qty||0)*(l.cost||0),0))}</td>
+          <td class="c">
+            ${p.paymentReceipt
+              ? `<a href="${p.paymentReceipt}" target="_blank" title="View receipt"><img src="${p.paymentReceipt}" style="max-height:36px;max-width:60px;border-radius:4px;border:1px solid var(--line);cursor:pointer"></a>`
+              : `<label class="btn ghost sm" style="cursor:pointer" title="Upload payment receipt">📎 Upload<input type="file" accept="image/*,application/pdf" style="display:none" data-receipt="${p.id}"></label>`}
+          </td>
           <td class="c"><span class="pill ${p.status==='received'?'done':'draft'}">${p.status==='received'?'RECEIVED':'DRAFT'}</span></td>
           <td class="c"><div class="btnrow" style="justify-content:center">
             <button class="btn ghost sm" data-view="${p.id}">View</button>
             ${p.status!=='received'?`<button class="btn sm" data-recv="${p.id}">Receive</button>`:''}
             <button class="btn ghost sm" data-print="${p.id}">Download</button>
+            ${isAdmin()?`<button class="btn danger sm" data-del-po="${p.id}" title="Delete PO">Delete</button>`:''}
           </div></td></tr>`).join("")}
       </tbody></table>`:'<div class="empty">No purchase orders yet.</div>'}
     </div>`;
@@ -619,6 +637,22 @@ function viewPO(){
   $("view").querySelectorAll("[data-recv]").forEach(b=>b.addEventListener("click",()=>receivePO(b.dataset.recv)));
   $("view").querySelectorAll("[data-print]").forEach(b=>b.addEventListener("click",()=>printDoc(docHTML_PO(DB.pos.find(x=>x.id===b.dataset.print)))));
   $("view").querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>previewDoc(docHTML_PO(DB.pos.find(x=>x.id===b.dataset.view)))));
+  $("view").querySelectorAll("[data-receipt]").forEach(inp=>inp.addEventListener("change",async()=>{
+    const file=inp.files[0]; if(!file)return;
+    const reader=new FileReader();
+    reader.onload=async e=>{
+      const ok=await uploadReceiptDB(inp.dataset.receipt,e.target.result);
+      if(ok){toast("Payment receipt uploaded"); viewPO();}
+    };
+    reader.readAsDataURL(file);
+  }));
+  $("view").querySelectorAll("[data-del-po]").forEach(b=>b.addEventListener("click",async()=>{
+    const p=DB.pos.find(x=>x.id===b.dataset.delPo);
+    if(!p)return;
+    if(!confirm("Permanently delete "+p.no+"? This cannot be undone."))return;
+    const ok=await deleteDocDB(p.id);
+    if(ok){toast(p.no+" deleted"); viewPO();}
+  }));
 }
 function poForm(){
   $("view").innerHTML=`
@@ -676,6 +710,7 @@ function viewMRO(){
             <button class="btn ghost sm" data-view="${m.id}">View</button>
             ${m.status!=='issued'?`<button class="btn sm" data-issue="${m.id}">Issue</button>`:''}
             <button class="btn ghost sm" data-print="${m.id}">Download</button>
+            ${isAdmin()?`<button class="btn danger sm" data-del-mro="${m.id}" title="Delete MRO">Delete</button>`:''}
           </div></td></tr>`).join("")}
       </tbody></table>`:'<div class="empty">No requisitions yet.</div>'}
     </div>`;
@@ -687,6 +722,13 @@ function viewMRO(){
   $("view").querySelectorAll("[data-issue]").forEach(b=>b.addEventListener("click",()=>issueMRO(b.dataset.issue)));
   $("view").querySelectorAll("[data-print]").forEach(b=>b.addEventListener("click",()=>printDoc(docHTML_MRO(DB.mros.find(x=>x.id===b.dataset.print)))));
   $("view").querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>previewDoc(docHTML_MRO(DB.mros.find(x=>x.id===b.dataset.view)))));
+  $("view").querySelectorAll("[data-del-mro]").forEach(b=>b.addEventListener("click",async()=>{
+    const m=DB.mros.find(x=>x.id===b.dataset.delMro);
+    if(!m)return;
+    if(!confirm("Permanently delete "+m.no+"? This cannot be undone."))return;
+    const ok=await deleteDocDB(m.id);
+    if(ok){toast(m.no+" deleted"); viewMRO();}
+  }));
 }
 function mroForm(){
   $("view").innerHTML=`
