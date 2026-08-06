@@ -1,9 +1,17 @@
 -- ============================================================
--- Kiru Energy — Inventory Management System
--- Supabase schema.  Run once in Supabase → SQL Editor → New query.
+-- Kiru Energy — Platform Schema
+-- Two independent inventory systems:
+--   "company"  →  items / documents / counters
+--   "lif"      →  lif_items / lif_documents / lif_counters
+--
+-- Run once (or re-run) in Supabase → SQL Editor → New query.
+-- All statements use IF NOT EXISTS / OR REPLACE so they are safe to re-run.
 -- ============================================================
 
--- ---------- TABLES ----------
+-- ============================================================
+-- COMPANY INVENTORY
+-- ============================================================
+
 create table if not exists public.items (
   id          uuid primary key default gen_random_uuid(),
   name        text not null,
@@ -22,24 +30,24 @@ create table if not exists public.documents (
   kind           text not null check (kind in ('po','mro')),
   no             text not null,
   doc_date       date not null default current_date,
-  status         text not null default 'draft',      -- draft | received | issued
+  status         text not null default 'draft',
   supplier       text default '',
   requested_by   text default '',
   project        text default '',
   note           text default '',
-  lines          jsonb not null default '[]'::jsonb, -- [{itemId, qty, cost}]
+  lines          jsonb not null default '[]'::jsonb,
   prepared_by    text default '',
   approved_by    text default '',
   approver_title text default '',
-  signature      text default '',                    -- data URL
-  applied_date      date,                               -- received / issued date
-  payment_receipt   text default '',                    -- data URL of uploaded payment receipt (PO only)
-  purpose           text default '',                    -- MRO purpose: New Project | Maintenance
-  created_by        text default '',
-  created_at        timestamptz default now()
+  signature      text default '',
+  applied_date   date,
+  payment_receipt text default '',
+  purpose        text default '',
+  created_by     text default '',
+  created_at     timestamptz default now()
 );
 
--- Add new columns to existing deployments (safe to re-run)
+-- Safe column additions for existing deployments
 alter table public.documents add column if not exists payment_receipt text default '';
 alter table public.documents add column if not exists purpose text default '';
 
@@ -52,7 +60,58 @@ insert into public.counters (kind, value) values ('po',0), ('mro',0)
 
 create index if not exists documents_kind_idx on public.documents (kind, created_at desc);
 
--- ---------- DOCUMENT NUMBERING (atomic) ----------
+-- ============================================================
+-- LIF INVENTORY
+-- ============================================================
+
+create table if not exists public.lif_items (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  sku         text default '',
+  category    text default '',
+  unit        text default 'Unit',
+  qty         numeric default 0,
+  cost        numeric default 0,
+  reorder     numeric default 0,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+create table if not exists public.lif_documents (
+  id             uuid primary key default gen_random_uuid(),
+  kind           text not null check (kind in ('po','mro')),
+  no             text not null,
+  doc_date       date not null default current_date,
+  status         text not null default 'draft',
+  supplier       text default '',
+  requested_by   text default '',
+  project        text default '',
+  note           text default '',
+  lines          jsonb not null default '[]'::jsonb,
+  prepared_by    text default '',
+  approved_by    text default '',
+  approver_title text default '',
+  signature      text default '',
+  applied_date   date,
+  payment_receipt text default '',
+  purpose        text default '',
+  created_by     text default '',
+  created_at     timestamptz default now()
+);
+
+create table if not exists public.lif_counters (
+  kind  text primary key,
+  value integer not null default 0
+);
+insert into public.lif_counters (kind, value) values ('po',0), ('mro',0)
+  on conflict (kind) do nothing;
+
+create index if not exists lif_documents_kind_idx on public.lif_documents (kind, created_at desc);
+
+-- ============================================================
+-- FUNCTIONS — COMPANY
+-- ============================================================
+
 create or replace function public.next_doc_no(p_kind text)
 returns text language plpgsql security definer as $$
 declare v integer; prefix text;
@@ -65,8 +124,6 @@ begin
   return 'KIRU-' || prefix || '-' || to_char(now(),'YYYYMM') || '-' || lpad(v::text, 3, '0');
 end $$;
 
--- ---------- APPLY A DOCUMENT TO STOCK (atomic) ----------
--- Receiving a PO adds stock; issuing an MRO removes it.
 create or replace function public.apply_document(p_id uuid)
 returns void language plpgsql security definer as $$
 declare d record; ln jsonb;
@@ -74,13 +131,11 @@ begin
   select * into d from public.documents where id = p_id for update;
   if d is null then raise exception 'Document not found'; end if;
   if d.status <> 'draft' then raise exception 'Document already applied'; end if;
-
   for ln in select * from jsonb_array_elements(d.lines) loop
     if d.kind = 'po' then
       update public.items
          set qty = coalesce(qty,0) + coalesce((ln->>'qty')::numeric,0),
-             cost = case when coalesce((ln->>'cost')::numeric,0) > 0
-                         then (ln->>'cost')::numeric else cost end,
+             cost = case when coalesce((ln->>'cost')::numeric,0) > 0 then (ln->>'cost')::numeric else cost end,
              updated_at = now()
        where id = (ln->>'itemId')::uuid;
     else
@@ -90,27 +145,85 @@ begin
        where id = (ln->>'itemId')::uuid;
     end if;
   end loop;
-
   update public.documents
      set status = case when d.kind = 'po' then 'received' else 'issued' end,
          applied_date = current_date
    where id = p_id;
 end $$;
 
--- ---------- ROW LEVEL SECURITY ----------
--- Any signed-in team member may read and write. Anonymous visitors get nothing.
-alter table public.items      enable row level security;
-alter table public.documents  enable row level security;
-alter table public.counters   enable row level security;
+-- ============================================================
+-- FUNCTIONS — LIF
+-- ============================================================
 
-drop policy if exists items_rw      on public.items;
-drop policy if exists documents_rw  on public.documents;
-drop policy if exists counters_r    on public.counters;
+create or replace function public.lif_next_doc_no(p_kind text)
+returns text language plpgsql security definer as $$
+declare v integer; prefix text;
+begin
+  update public.lif_counters set value = value + 1 where kind = p_kind returning value into v;
+  if v is null then
+    insert into public.lif_counters(kind, value) values (p_kind, 1) returning value into v;
+  end if;
+  prefix := case when p_kind = 'po' then 'PO' else 'MRO' end;
+  return 'LIF-' || prefix || '-' || to_char(now(),'YYYYMM') || '-' || lpad(v::text, 3, '0');
+end $$;
 
-create policy items_rw     on public.items     for all to authenticated using (true) with check (true);
-create policy documents_rw on public.documents for all to authenticated using (true) with check (true);
-create policy counters_r   on public.counters  for select to authenticated using (true);
+create or replace function public.lif_apply_document(p_id uuid)
+returns void language plpgsql security definer as $$
+declare d record; ln jsonb;
+begin
+  select * into d from public.lif_documents where id = p_id for update;
+  if d is null then raise exception 'Document not found'; end if;
+  if d.status <> 'draft' then raise exception 'Document already applied'; end if;
+  for ln in select * from jsonb_array_elements(d.lines) loop
+    if d.kind = 'po' then
+      update public.lif_items
+         set qty = coalesce(qty,0) + coalesce((ln->>'qty')::numeric,0),
+             cost = case when coalesce((ln->>'cost')::numeric,0) > 0 then (ln->>'cost')::numeric else cost end,
+             updated_at = now()
+       where id = (ln->>'itemId')::uuid;
+    else
+      update public.lif_items
+         set qty = coalesce(qty,0) - coalesce((ln->>'qty')::numeric,0),
+             updated_at = now()
+       where id = (ln->>'itemId')::uuid;
+    end if;
+  end loop;
+  update public.lif_documents
+     set status = case when d.kind = 'po' then 'received' else 'issued' end,
+         applied_date = current_date
+   where id = p_id;
+end $$;
 
--- ---------- REALTIME ----------
+-- ============================================================
+-- ROW LEVEL SECURITY
+-- ============================================================
+
+alter table public.items          enable row level security;
+alter table public.documents      enable row level security;
+alter table public.counters       enable row level security;
+alter table public.lif_items      enable row level security;
+alter table public.lif_documents  enable row level security;
+alter table public.lif_counters   enable row level security;
+
+drop policy if exists items_rw          on public.items;
+drop policy if exists documents_rw      on public.documents;
+drop policy if exists counters_r        on public.counters;
+drop policy if exists lif_items_rw      on public.lif_items;
+drop policy if exists lif_documents_rw  on public.lif_documents;
+drop policy if exists lif_counters_r    on public.lif_counters;
+
+create policy items_rw          on public.items          for all to authenticated using (true) with check (true);
+create policy documents_rw      on public.documents      for all to authenticated using (true) with check (true);
+create policy counters_r        on public.counters        for select to authenticated using (true);
+create policy lif_items_rw      on public.lif_items      for all to authenticated using (true) with check (true);
+create policy lif_documents_rw  on public.lif_documents  for all to authenticated using (true) with check (true);
+create policy lif_counters_r    on public.lif_counters    for select to authenticated using (true);
+
+-- ============================================================
+-- REALTIME
+-- ============================================================
+
 alter publication supabase_realtime add table public.items;
 alter publication supabase_realtime add table public.documents;
+alter publication supabase_realtime add table public.lif_items;
+alter publication supabase_realtime add table public.lif_documents;
