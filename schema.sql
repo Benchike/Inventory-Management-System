@@ -148,6 +148,48 @@ do $$ begin
 end $$;
 
 -- ============================================================
+-- LIF PHASE 1 INSTALLATIONS (deployment / commissioning register)
+-- ============================================================
+
+create table if not exists public.lif_phase1_installations (
+  id            uuid primary key default gen_random_uuid(),
+  ref           text not null default '',
+  business      text not null default '',
+  category      text not null default 'SME' check (category in ('Residential','SME')),
+  cluster       text default '',
+  cls           text not null default 'SGS' check (cls in ('SGS','GBS')),
+  pv_qty        numeric not null default 0,
+  pv_w          numeric not null default 0,
+  inv_kw        numeric not null default 0,
+  bat_kwh       numeric not null default 0,
+  comm_date     date,
+  status        text not null default 'Commissioned',
+  beneficiaries numeric not null default 0,
+  media_link    text default '',
+  iot_link      text default '',
+  checks        jsonb not null default '[true,true,true,true,true]'::jsonb,
+  period        text default '',
+  sort_order    integer not null default 0,
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now()
+);
+
+create index if not exists lif_phase1_installations_sort_idx on public.lif_phase1_installations (sort_order);
+
+alter table public.lif_phase1_installations enable row level security;
+drop policy if exists lif_phase1_installations_rw on public.lif_phase1_installations;
+create policy lif_phase1_installations_rw on public.lif_phase1_installations for all to authenticated using (true) with check (true);
+
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'lif_phase1_installations'
+  ) then
+    alter publication supabase_realtime add table public.lif_phase1_installations;
+  end if;
+end $$;
+
+-- ============================================================
 -- FUNCTIONS — COMPANY
 -- ============================================================
 
