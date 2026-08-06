@@ -79,12 +79,26 @@ create table if not exists public.invoices (
   batt_qty      numeric default 0,
   add_items     jsonb not null default '[]'::jsonb,
   total_amt     numeric not null default 0,
+  bank_name       text default 'Wema Bank',
+  account_name    text default 'Kiru Energy Ltd',
+  account_number  text default '127429081',
+  sign_name       text default 'Chidi Okoronkwo',
+  sign_title      text default 'Head of Sales',
+  signature       text default '',
   status        text not null default 'draft' check (status in ('draft','issued')),
   issued_at     timestamptz,
   created_by    text default '',
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
+
+-- Safe column additions for existing deployments
+alter table public.invoices add column if not exists bank_name      text default 'Wema Bank';
+alter table public.invoices add column if not exists account_name   text default 'Kiru Energy Ltd';
+alter table public.invoices add column if not exists account_number text default '127429081';
+alter table public.invoices add column if not exists sign_name      text default 'Chidi Okoronkwo';
+alter table public.invoices add column if not exists sign_title     text default 'Head of Sales';
+alter table public.invoices add column if not exists signature      text default '';
 
 create index if not exists invoices_status_idx on public.invoices (status, created_at desc);
 
