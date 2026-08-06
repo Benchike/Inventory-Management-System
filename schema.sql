@@ -61,6 +61,67 @@ insert into public.counters (kind, value) values ('po',0), ('mro',0)
 create index if not exists documents_kind_idx on public.documents (kind, created_at desc);
 
 -- ============================================================
+-- COMPANY INVOICING
+-- ============================================================
+
+create table if not exists public.invoices (
+  id            uuid primary key default gen_random_uuid(),
+  inv_no        text not null unique,
+  inv_date      date not null default current_date,
+  due_date      date,
+  client_name   text default '',
+  client_addr   text default '',
+  panel_cap     numeric default 0,
+  panel_qty     numeric default 0,
+  inv_cap       numeric default 0,
+  inv_qty       numeric default 0,
+  batt_cap      numeric default 0,
+  batt_qty      numeric default 0,
+  add_items     jsonb not null default '[]'::jsonb,
+  total_amt     numeric not null default 0,
+  status        text not null default 'draft' check (status in ('draft','issued')),
+  issued_at     timestamptz,
+  created_by    text default '',
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now()
+);
+
+create index if not exists invoices_status_idx on public.invoices (status, created_at desc);
+
+create table if not exists public.invoice_counters (
+  day_key text primary key,
+  value   integer not null default 0
+);
+
+create or replace function public.next_invoice_no()
+returns text language plpgsql security definer as $$
+declare v integer; dkey text;
+begin
+  dkey := to_char(now(),'YYYYMMDD');
+  update public.invoice_counters set value = value + 1 where day_key = dkey returning value into v;
+  if v is null then
+    insert into public.invoice_counters(day_key, value) values (dkey, 1) returning value into v;
+  end if;
+  return 'KIRU-INV-' || dkey || '-' || lpad(v::text, 4, '0');
+end $$;
+
+alter table public.invoices          enable row level security;
+alter table public.invoice_counters  enable row level security;
+drop policy if exists invoices_rw         on public.invoices;
+drop policy if exists invoice_counters_r  on public.invoice_counters;
+create policy invoices_rw         on public.invoices          for all    to authenticated using (true) with check (true);
+create policy invoice_counters_r  on public.invoice_counters  for select to authenticated using (true);
+
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'invoices'
+  ) then
+    alter publication supabase_realtime add table public.invoices;
+  end if;
+end $$;
+
+-- ============================================================
 -- LIF INVENTORY
 -- ============================================================
 
