@@ -161,9 +161,6 @@
   .mc-tool.active{border-color:rgba(0,164,255,.3)}
   a.mc-tool.active:hover{border-color:var(--blue);box-shadow:0 6px 16px -10px rgba(0,164,255,.5)}
   .mc-tool.soon{opacity:.55}
-  .module-card .mc-enter{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;font-weight:700;color:var(--blue-deep);background:none;border:none;cursor:pointer;font-family:inherit;padding:0}
-  .mc-enter svg{width:16px;height:16px;transition:transform .15s}
-  .module-card:hover .mc-enter svg{transform:translateX(4px)}
   .homebrand{font-weight:800;font-size:1rem;letter-spacing:-.02em}
   .homebrand span{display:block;font-size:.72rem;font-weight:500;color:var(--muted);margin-top:2px}
   .mod-label{font-size:.72rem;font-weight:700;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--soft);color:var(--muted);white-space:nowrap}
@@ -462,7 +459,7 @@ function viewHome(){
     <div style="max-width:720px;margin:0 auto">
       <div style="margin-bottom:8px;font-size:.78rem;color:var(--muted)">Welcome, <b>${esc((USER&&USER.email)||"")}</b></div>
       <h2 style="font-size:1.1rem;font-weight:800;margin-bottom:4px;color:var(--text)">Choose a workspace</h2>
-      <p style="font-size:.82rem;color:var(--muted);margin-bottom:0">Each workspace has its own stock catalogue, purchase orders, and requisitions stored separately.</p>
+      <p style="font-size:.82rem;color:var(--muted);margin-bottom:0">Each workspace bundles its own inventory and dedicated tools, kept separate from the other. Click a card to open it.</p>
       <div class="home-grid">
 
         <div class="module-card" onclick="setModule('lif')">
@@ -474,7 +471,6 @@ function viewHome(){
             <a class="mc-tool active" href="phase1-deployment-report.html" target="_blank" rel="noopener" onclick="event.stopPropagation()"><span class="ic">📋</span><span class="tx"><span class="nm">Phase 1 Deployment Report</span><span class="ds">Commissioning register for Carbon Trust</span></span></a>
             <a class="mc-tool active" href="deployment-cost-template.html" target="_blank" rel="noopener" onclick="event.stopPropagation()"><span class="ic">💰</span><span class="tx"><span class="nm">Deployment Cost Manager</span><span class="ds">Per-site capital cost breakdown</span></span></a>
           </div>
-          <button class="mc-enter">Open workspace <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
         </div>
 
         <div class="module-card" onclick="setModule('company')">
@@ -485,7 +481,6 @@ function viewHome(){
             <span class="mc-tool active"><span class="ic">📦</span><span class="tx"><span class="nm">Inventory Manager</span><span class="ds">Stock, purchase orders &amp; requisitions</span></span></span>
             <a class="mc-tool active" href="invoice-generator.html" target="_blank" rel="noopener" onclick="event.stopPropagation()"><span class="ic">🧾</span><span class="tx"><span class="nm">Invoice Generator</span><span class="ds">Draft, issue &amp; track customer invoices</span></span></a>
           </div>
-          <button class="mc-enter">Open workspace <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
         </div>
 
       </div>
