@@ -109,6 +109,45 @@ insert into public.lif_counters (kind, value) values ('po',0), ('mro',0)
 create index if not exists lif_documents_kind_idx on public.lif_documents (kind, created_at desc);
 
 -- ============================================================
+-- LIF DEPLOYMENT COSTS (Phase 1 capital cost register)
+-- ============================================================
+
+create table if not exists public.lif_deployment_costs (
+  id          uuid primary key default gen_random_uuid(),
+  ref         text not null default '',
+  customer    text not null default '',
+  location    text default '',
+  site_date   date,
+  cls         text not null default 'SGS' check (cls in ('SGS','GBS')),
+  config      text not null default 'separate' check (config in ('separate','aio')),
+  panels      jsonb not null default '{"q":0,"p":0,"cap":""}'::jsonb,
+  inverter    jsonb not null default '{"q":0,"p":0,"cap":""}'::jsonb,
+  battery     jsonb not null default '{"q":0,"p":0,"cap":""}'::jsonb,
+  generator   jsonb not null default '{"q":0,"p":0,"cap":""}'::jsonb,
+  bos         jsonb not null default '{"q":1,"p":0,"cap":""}'::jsonb,
+  iot         jsonb not null default '{"q":1,"p":0,"cap":""}'::jsonb,
+  period      text default '',
+  sort_order  integer not null default 0,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+create index if not exists lif_deployment_costs_sort_idx on public.lif_deployment_costs (sort_order);
+
+alter table public.lif_deployment_costs enable row level security;
+drop policy if exists lif_deployment_costs_rw on public.lif_deployment_costs;
+create policy lif_deployment_costs_rw on public.lif_deployment_costs for all to authenticated using (true) with check (true);
+
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'lif_deployment_costs'
+  ) then
+    alter publication supabase_realtime add table public.lif_deployment_costs;
+  end if;
+end $$;
+
+-- ============================================================
 -- FUNCTIONS — COMPANY
 -- ============================================================
 
