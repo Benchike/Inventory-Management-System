@@ -71,12 +71,15 @@ create table if not exists public.invoices (
   due_date      date,
   client_name   text default '',
   client_addr   text default '',
+  panel_name    text default '',
   panel_cap     numeric default 0,
   panel_qty     numeric default 0,
   panel_price   numeric default 0,
+  inv_name      text default '',
   inv_cap       numeric default 0,
   inv_qty       numeric default 0,
   inv_price     numeric default 0,
+  batt_name     text default '',
   batt_cap      numeric default 0,
   batt_qty      numeric default 0,
   batt_price    numeric default 0,
@@ -105,6 +108,9 @@ alter table public.invoices add column if not exists signature      text default
 alter table public.invoices add column if not exists panel_price    numeric default 0;
 alter table public.invoices add column if not exists inv_price      numeric default 0;
 alter table public.invoices add column if not exists batt_price     numeric default 0;
+alter table public.invoices add column if not exists panel_name     text default '';
+alter table public.invoices add column if not exists inv_name       text default '';
+alter table public.invoices add column if not exists batt_name      text default '';
 
 create index if not exists invoices_status_idx on public.invoices (status, created_at desc);
 

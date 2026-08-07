@@ -219,16 +219,19 @@ window.KIRU_CONFIG = {
         <h2>Equipment</h2>
         <div class="eqblock">
           <div class="nm">Solar panels</div>
+          <input type="text" id="panelName" placeholder="Full name / model (e.g. Jinko Tiger Neo 550W Mono PERC)" style="margin-bottom:8px">
           <div class="tiny">Capacity (W) · Qty · Unit price (₦)</div>
           <div class="row3cap"><input type="number" id="panelCap" value="550"><input type="number" id="panelQty" value="6"><input type="text" inputmode="numeric" id="panelPrice" value="0"></div>
         </div>
         <div class="eqblock">
           <div class="nm">Inverter</div>
+          <input type="text" id="invName" placeholder="Full name / model (e.g. Deye SUN-5K-SG04LP1-EU)" style="margin-bottom:8px">
           <div class="tiny">Capacity (kVA) · Qty · Unit price (₦)</div>
           <div class="row3cap"><input type="number" id="invCap" value="5"><input type="number" id="invQty" value="1"><input type="text" inputmode="numeric" id="invPrice" value="0"></div>
         </div>
         <div class="eqblock">
           <div class="nm">Battery</div>
+          <input type="text" id="battName" placeholder="Full name / model (e.g. Pylontech US5000 LiFePO4)" style="margin-bottom:8px">
           <div class="tiny">Capacity (kWh) · Qty · Unit price (₦)</div>
           <div class="row3cap"><input type="number" id="battCap" value="5"><input type="number" id="battQty" value="2"><input type="text" inputmode="numeric" id="battPrice" value="0"></div>
         </div>
@@ -427,9 +430,9 @@ function setSyncBanner(msg,ok){
 function rowToInvoice(r){
   return {_id:r.id, invNo:r.inv_no||"", invDate:r.inv_date||"", dueDate:r.due_date||"",
     clientName:r.client_name||"", clientAddr:r.client_addr||"",
-    panelCap:r.panel_cap||0, panelQty:r.panel_qty||0, panelPrice:r.panel_price||0,
-    invCap:r.inv_cap||0, invQty:r.inv_qty||0, invPrice:r.inv_price||0,
-    battCap:r.batt_cap||0, battQty:r.batt_qty||0, battPrice:r.batt_price||0,
+    panelName:r.panel_name||"", panelCap:r.panel_cap||0, panelQty:r.panel_qty||0, panelPrice:r.panel_price||0,
+    invName:r.inv_name||"", invCap:r.inv_cap||0, invQty:r.inv_qty||0, invPrice:r.inv_price||0,
+    battName:r.batt_name||"", battCap:r.batt_cap||0, battQty:r.batt_qty||0, battPrice:r.batt_price||0,
     addItems: Array.isArray(r.add_items)?r.add_items:[],
     status:r.status||"draft",
     bankName:r.bank_name||"", accountName:r.account_name||"", accountNumber:r.account_number||"",
@@ -438,9 +441,9 @@ function rowToInvoice(r){
 function formToRow(){
   return {inv_no:val("invNo"), inv_date:val("invDate")||null, due_date:val("dueDate")||null,
     client_name:val("clientName"), client_addr:val("clientAddr"),
-    panel_cap:num("panelCap"), panel_qty:num("panelQty"), panel_price:num("panelPrice"),
-    inv_cap:num("invCap"), inv_qty:num("invQty"), inv_price:num("invPrice"),
-    batt_cap:num("battCap"), batt_qty:num("battQty"), batt_price:num("battPrice"),
+    panel_name:val("panelName"), panel_cap:num("panelCap"), panel_qty:num("panelQty"), panel_price:num("panelPrice"),
+    inv_name:val("invName"), inv_cap:num("invCap"), inv_qty:num("invQty"), inv_price:num("invPrice"),
+    batt_name:val("battName"), batt_cap:num("battCap"), batt_qty:num("battQty"), batt_price:num("battPrice"),
     add_items:addItems, total_amt:grandTotal,
     bank_name:val("bankName"), account_name:val("accountName"), account_number:val("accountNumber"),
     sign_name:val("signName"), sign_title:val("signTitle"), signature:customSig};
@@ -449,9 +452,9 @@ function loadInvoiceIntoForm(inv){
   curId=inv._id; curStatus=inv.status;
   $("invNo").value=inv.invNo; $("invDate").value=inv.invDate; $("dueDate").value=inv.dueDate||"";
   $("clientName").value=inv.clientName; $("clientAddr").value=inv.clientAddr;
-  $("panelCap").value=inv.panelCap; $("panelQty").value=inv.panelQty; $("panelPrice").value=Number(inv.panelPrice||0).toLocaleString("en-US");
-  $("invCap").value=inv.invCap; $("invQty").value=inv.invQty; $("invPrice").value=Number(inv.invPrice||0).toLocaleString("en-US");
-  $("battCap").value=inv.battCap; $("battQty").value=inv.battQty; $("battPrice").value=Number(inv.battPrice||0).toLocaleString("en-US");
+  $("panelName").value=inv.panelName||""; $("panelCap").value=inv.panelCap; $("panelQty").value=inv.panelQty; $("panelPrice").value=Number(inv.panelPrice||0).toLocaleString("en-US");
+  $("invName").value=inv.invName||""; $("invCap").value=inv.invCap; $("invQty").value=inv.invQty; $("invPrice").value=Number(inv.invPrice||0).toLocaleString("en-US");
+  $("battName").value=inv.battName||""; $("battCap").value=inv.battCap; $("battQty").value=inv.battQty; $("battPrice").value=Number(inv.battPrice||0).toLocaleString("en-US");
   addItems = inv.addItems && inv.addItems.length ? inv.addItems.map(x=>({desc:x.desc||"",qty:x.qty||0,price:x.price||0})) : [];
   $("bankName").value=inv.bankName||"Wema Bank";
   $("accountName").value=inv.accountName||"Kiru Energy Ltd";
@@ -573,9 +576,9 @@ async function newInvoice(){
   $("dueDate").value="";
   $("clientName").value="Customer name";
   $("clientAddr").value="Shop address, Market, City";
-  $("panelCap").value=550; $("panelQty").value=6; $("panelPrice").value="0";
-  $("invCap").value=5; $("invQty").value=1; $("invPrice").value="0";
-  $("battCap").value=5; $("battQty").value=2; $("battPrice").value="0";
+  $("panelName").value=""; $("panelCap").value=550; $("panelQty").value=6; $("panelPrice").value="0";
+  $("invName").value=""; $("invCap").value=5; $("invQty").value=1; $("invPrice").value="0";
+  $("battName").value=""; $("battCap").value=5; $("battQty").value=2; $("battPrice").value="0";
   addItems=[{desc:"Installation, wiring & BOS",qty:1,price:0}];
   $("bankName").value="Wema Bank"; $("accountName").value="Kiru Energy Ltd"; $("accountNumber").value="127429081";
   $("signName").value="Chidi Okoronkwo"; $("signTitle").value="Head of Sales";
@@ -643,9 +646,9 @@ function calc(){
   const ic=num("invCap"),iq=num("invQty"),ip=num("invPrice");
   const bc=num("battCap"),bq=num("battQty"),bp=num("battPrice");
   const lines=[
-    {d:"Solar panels",cap:pc?pc+" W":"—",qty:pq,price:pp},
-    {d:"Inverter",cap:ic?ic+" kVA":"—",qty:iq,price:ip},
-    {d:"Battery",cap:bc?bc+" kWh":"—",qty:bq,price:bp},
+    {d:val("panelName").trim()||"Solar panels",cap:pc?pc+" W":"—",qty:pq,price:pp},
+    {d:val("invName").trim()||"Inverter",cap:ic?ic+" kVA":"—",qty:iq,price:ip},
+    {d:val("battName").trim()||"Battery",cap:bc?bc+" kWh":"—",qty:bq,price:bp},
   ];
   addItems.forEach(it=>{ if((it.desc||"").trim()) lines.push({d:it.desc,cap:"—",qty:it.qty,price:it.price||0}); });
   let body="", total=0;
@@ -679,7 +682,7 @@ function calc(){
 }
 
 $("newNo").addEventListener("click",async()=>{$("invNo").value= synced ? await genNoRemote() : genNo(); calc(); queueAutosave();});
-["invNo","invDate","dueDate","clientName","clientAddr","panelCap","panelQty","invCap","invQty","battCap","battQty"]
+["invNo","invDate","dueDate","clientName","clientAddr","panelName","panelCap","panelQty","invName","invCap","invQty","battName","battCap","battQty"]
   .forEach(id=>$(id).addEventListener("input",()=>{calc(); queueAutosave();}));
 ["panelPrice","invPrice","battPrice"].forEach(id=>$(id).addEventListener("input",e=>{fmtCommas(e.target);calc();queueAutosave();}));
 $("addItem").addEventListener("click",()=>{addItems.push({desc:"",qty:1,price:0});renderAdd();calc();queueAutosave();});
