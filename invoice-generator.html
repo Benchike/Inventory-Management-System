@@ -13,7 +13,8 @@
 <script>
 window.KIRU_CONFIG = {
   SUPABASE_URL: "https://mfthkjtoggofjjmwyekt.supabase.co",
-  SUPABASE_ANON_KEY: "sb_publishable_la6NVRk4WPj5e4FDNB_rMQ_ArsAf3jV"
+  SUPABASE_ANON_KEY: "sb_publishable_la6NVRk4WPj5e4FDNB_rMQ_ArsAf3jV",
+  ADMIN_EMAIL: "benokpala@ourkiru.com"
 };
 </script>
 <style>
@@ -117,6 +118,8 @@ window.KIRU_CONFIG = {
   .histtable .rowactions{display:flex;gap:6px;justify-content:flex-end}
   .histtable .abtn{font-family:inherit;font-size:.68rem;font-weight:700;color:var(--blue-deep);background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:6px 10px;cursor:pointer;white-space:nowrap;transition:.15s}
   .histtable .abtn:hover{border-color:var(--blue)}
+  .histtable .abtn.danger{color:#ff6b6b}
+  .histtable .abtn.danger:hover{border-color:#ff6b6b;background:rgba(255,107,107,.1)}
   .histempty{font-size:.82rem;color:var(--muted);text-align:center;padding:30px}
   .upbtn{display:inline-block;margin-top:6px;font-size:.78rem;font-weight:700;color:var(--blue-deep);cursor:pointer;background:var(--soft);border:1px dashed var(--line);border-radius:9px;padding:9px 12px;transition:.16s}
   .upbtn:hover{border-color:var(--blue)}
@@ -409,7 +412,8 @@ $("signFile").addEventListener("change",e=>{
 $("clearSig").addEventListener("click",()=>{ $("signFile").value=""; applyCustomSig(""); });
 
 /* ============ SUPABASE DATA LAYER ============ */
-let SB=null, synced=false, saveTimer=null;
+let SB=null, synced=false, saveTimer=null, currentUserEmail="";
+function isAdmin(){return currentUserEmail && currentUserEmail.toLowerCase()===((window.KIRU_CONFIG&&window.KIRU_CONFIG.ADMIN_EMAIL)||"").toLowerCase();}
 let curId=null, curStatus="new"; // "new" | "draft" | "issued"
 function cfgOK(){const c=window.KIRU_CONFIG||{};return c.SUPABASE_URL&&c.SUPABASE_ANON_KEY&&!/YOUR-/.test(c.SUPABASE_URL+c.SUPABASE_ANON_KEY);}
 function setSyncBanner(msg,ok){
@@ -530,6 +534,7 @@ function renderHistTable(rows){
         <button class="abtn" data-act="open" data-id="${r.id}">Open</button>
         <button class="abtn" data-act="pdf" data-id="${r.id}">PDF</button>
         <button class="abtn" data-act="png" data-id="${r.id}">PNG</button>
+        ${isAdmin()?`<button class="abtn danger" data-act="delete" data-id="${r.id}" data-no="${esc(r.inv_no)}">Delete</button>`:''}
       </div></td>
     </tr>`).join("");
   tb.querySelectorAll(".abtn").forEach(b=>b.addEventListener("click",async()=>{
@@ -537,7 +542,16 @@ function renderHistTable(rows){
     if(act==="open"){ if(await switchToInvoice(id)) setView("editor"); }
     else if(act==="pdf"){ if(await switchToInvoice(id)) await downloadPdf(); }
     else if(act==="png"){ if(await switchToInvoice(id)) await downloadPng(); }
+    else if(act==="delete"){ await deleteInvoice(id, b.dataset.no); }
   }));
+}
+async function deleteInvoice(id, invNoLabel){
+  if(!isAdmin()) return;
+  if(!confirm("Permanently delete invoice "+invNoLabel+"? This cannot be undone.")) return;
+  const {error}=await SB.from("invoices").delete().eq("id",id);
+  if(error){ console.error("delete error",error); alert("Could not delete invoice: "+error.message); return; }
+  if(id===curId){ await newInvoice(); }
+  await loadHistory();
 }
 async function openInvoice(id){
   if(!synced) return;
@@ -599,6 +613,7 @@ async function initApp(){
     return;
   }
   synced=true;
+  currentUserEmail=(session.user&&session.user.email)||"";
   await loadHistory();
   await newInvoice();
 }
