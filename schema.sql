@@ -73,10 +73,13 @@ create table if not exists public.invoices (
   client_addr   text default '',
   panel_cap     numeric default 0,
   panel_qty     numeric default 0,
+  panel_price   numeric default 0,
   inv_cap       numeric default 0,
   inv_qty       numeric default 0,
+  inv_price     numeric default 0,
   batt_cap      numeric default 0,
   batt_qty      numeric default 0,
+  batt_price    numeric default 0,
   add_items     jsonb not null default '[]'::jsonb,
   total_amt     numeric not null default 0,
   bank_name       text default 'Wema Bank',
@@ -99,6 +102,9 @@ alter table public.invoices add column if not exists account_number text default
 alter table public.invoices add column if not exists sign_name      text default 'Chidi Okoronkwo';
 alter table public.invoices add column if not exists sign_title     text default 'Head of Sales';
 alter table public.invoices add column if not exists signature      text default '';
+alter table public.invoices add column if not exists panel_price    numeric default 0;
+alter table public.invoices add column if not exists inv_price      numeric default 0;
+alter table public.invoices add column if not exists batt_price     numeric default 0;
 
 create index if not exists invoices_status_idx on public.invoices (status, created_at desc);
 
