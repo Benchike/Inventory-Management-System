@@ -8,7 +8,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 window.KIRU_CONFIG = {
@@ -96,6 +95,7 @@ window.KIRU_CONFIG = {
   .btn.issue{background:#1faa6b;color:#04160d}.btn.issue:hover{background:#188a58}
   .btn.draft{background:var(--card-bg);color:var(--text);border-color:var(--line)}.btn.draft:hover{border-color:var(--blue);color:var(--blue-deep)}
   .btn:disabled{opacity:.45;cursor:not-allowed}
+  .hint{font-size:.7rem;color:var(--muted);margin-top:10px;line-height:1.45;text-align:center}
   .statusrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
   .statuspill{font-size:.68rem;font-weight:800;letter-spacing:.04em;padding:5px 11px;border-radius:999px;text-transform:uppercase}
   .statuspill.draft{background:rgba(224,138,30,.14);color:#b06a12;border:1px solid rgba(224,138,30,.4)}
@@ -167,6 +167,17 @@ window.KIRU_CONFIG = {
   .pv-sig .ln{border-top:1.5px solid #021431;margin-top:2px;padding-top:5px;font-size:13px;font-weight:700}
   .pv-sig .role{font-size:10.5px;color:#56657a;font-weight:500}
   .pv-foot{text-align:center;font-size:11px;color:#8392a5;margin-top:24px}
+
+  @page{size:A4;margin:10mm}
+  @media print{
+    body{background:#fff!important;background-image:none!important}
+    .wrap{max-width:none;padding:0;margin:0}
+    header,.viewtabs,.controls,#syncBanner,#historyView,.modalbg{display:none!important}
+    .layout{display:block!important}
+    .paperwrap{display:block!important;gap:0}
+    .paper{width:100%!important;max-width:none;border:none;border-radius:0;box-shadow:none}
+    table.items th,.pv-totbox .l{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
 </style>
 </head>
 <body>
@@ -267,9 +278,12 @@ window.KIRU_CONFIG = {
           <button class="minibtn" id="clearSig" style="margin-top:8px;display:none">Use default stamp instead</button></div>
       </div>
 
-      <div class="exports">
-        <button class="btn pdf" id="dlPdf">Download PDF</button>
-        <button class="btn png" id="dlPng">Download PNG</button>
+      <div class="exports" style="flex-direction:column">
+        <div style="display:flex;gap:10px;width:100%">
+          <button class="btn pdf" id="dlPdf">Download PDF</button>
+          <button class="btn png" id="dlPng">Download PNG</button>
+        </div>
+        <div class="hint">PDF opens your browser's print dialog — choose <b>Save as PDF</b>. Text stays selectable and the file stays small.</div>
       </div>
     </div>
 
@@ -688,7 +702,7 @@ function calc(){
 }
 
 $("newNo").addEventListener("click",async()=>{$("invNo").value= synced ? await genNoRemote() : genNo(); calc(); queueAutosave();});
-["invNo","invDate","dueDate","clientName","clientAddr","panelName","panelCap","panelQty","invName","invCap","invQty","battName","battCap","battQty"]
+["invNo","invDate","dueDate","clientName","clientAddr","panelName","panelCap","panelQty","invName","invCap","invQty","battName","battCap","battQty","bankName","accountName","accountNumber","signName","signTitle"]
   .forEach(id=>$(id).addEventListener("input",()=>{calc(); queueAutosave();}));
 ["panelPrice","invPrice","battPrice"].forEach(id=>$(id).addEventListener("input",e=>{fmtCommas(e.target);calc();queueAutosave();}));
 $("addItem").addEventListener("click",()=>{addItems.push({desc:"",qty:1,price:0});renderAdd();calc();queueAutosave();});
@@ -702,12 +716,9 @@ async function downloadPng(){
   const c=await snap(); const a=document.createElement("a"); a.download=(val("invNo")||"invoice")+".png"; a.href=c.toDataURL("image/png"); a.click();
 }
 $("dlPng").addEventListener("click",downloadPng);
-async function downloadPdf(){
-  const c=await snap(); const img=c.toDataURL("image/png");
-  const {jsPDF}=window.jspdf; const pdf=new jsPDF("p","pt","a4");
-  const pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight();
-  const ratio=Math.min(pw/c.width, ph/c.height); const w=c.width*ratio, h=c.height*ratio;
-  pdf.addImage(img,"PNG",(pw-w)/2,16,w,h); pdf.save((val("invNo")||"invoice")+".pdf");
+function downloadPdf(){
+  setView("editor");
+  requestAnimationFrame(()=>window.print());
 }
 $("dlPdf").addEventListener("click",downloadPdf);
 
