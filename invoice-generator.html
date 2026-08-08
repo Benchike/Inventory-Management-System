@@ -373,6 +373,7 @@ function genNo(){
   return "KIRU-INV-"+ymd+"-"+String(Date.now()%10000).padStart(4,"0");
 }
 function fmtDate(s){ if(!s)return""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}); }
+function isLotQty(v){ return typeof v==="string" && v.trim().toLowerCase()==="lot"; }
 
 let customSig="";
 let grandTotal=0;
@@ -627,7 +628,7 @@ function renderAdd(){
   addItems.forEach((it,i)=>{
     const r=document.createElement("div"); r.className="addrow";
     r.innerHTML=`<input type="text" data-i="${i}" data-k="desc" value="${esc(it.desc)}" placeholder="Description">
-      <input type="number" data-i="${i}" data-k="qty" value="${it.qty}">
+      <input type="text" data-i="${i}" data-k="qty" value="${esc(String(it.qty!==undefined&&it.qty!==null?it.qty:''))}" placeholder="Qty or Lot">
       <input type="text" inputmode="numeric" data-i="${i}" data-k="price" value="${Number(it.price||0).toLocaleString('en-US')}">
       <button class="delbtn" data-del="${i}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>`;
     c.appendChild(r);
@@ -635,7 +636,7 @@ function renderAdd(){
   c.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",e=>{
     const i=+e.target.dataset.i,k=e.target.dataset.k;
     if(k==="price"){ fmtCommas(e.target); addItems[i].price=parseFloat(e.target.value.replace(/,/g,""))||0; }
-    else addItems[i][k]= k==="qty" ? (parseFloat(e.target.value)||0) : e.target.value;
+    else addItems[i][k]=e.target.value;
     calc(); queueAutosave();
   }));
   c.querySelectorAll(".delbtn").forEach(b=>b.addEventListener("click",()=>{addItems.splice(+b.dataset.del,1);renderAdd();calc();queueAutosave();}));
@@ -650,10 +651,15 @@ function calc(){
     {d:val("invName").trim()||"Inverter",cap:ic?ic+" kVA":"—",qty:iq,price:ip},
     {d:val("battName").trim()||"Battery",cap:bc?bc+" kWh":"—",qty:bq,price:bp},
   ];
-  addItems.forEach(it=>{ if((it.desc||"").trim()) lines.push({d:it.desc,cap:"—",qty:it.qty,price:it.price||0}); });
+  addItems.forEach(it=>{
+    if(!(it.desc||"").trim()) return;
+    const lot=isLotQty(it.qty);
+    lines.push({d:it.desc,cap:"—",qty: lot?"Lot":(parseFloat(it.qty)||0), price:it.price||0, lot});
+  });
   let body="", total=0;
   lines.forEach(l=>{
-    const amt=(l.qty||0)*(l.price||0); total+=amt;
+    const amt = l.lot ? (l.price||0) : (l.qty||0)*(l.price||0);
+    total+=amt;
     body+=`<tr><td><span class="d">${esc(l.d)}</span></td><td>${l.cap}</td><td>${l.qty||0}</td><td>${l.price?ngn.format(l.price):"—"}</td><td>${amt?ngn.format(amt):"—"}</td></tr>`;
   });
   $("pv_items").innerHTML=body;
