@@ -73,7 +73,9 @@
   .pill.ok{background:var(--green)}.pill.low{background:var(--amber)}.pill.out{background:var(--red)}
   .pill.draft{background:var(--muted)}.pill.done{background:var(--green)}.pill.in{background:var(--blue-deep)}.pill.outv{background:var(--amber)}
   .empty{padding:26px;text-align:center;color:var(--muted);font-size:.85rem;font-style:italic}
-  .linehead,.lineitem{display:grid;grid-template-columns:1fr 70px 110px 32px;gap:7px;align-items:center}
+  .linehead,.lineitem{display:grid;gap:7px;align-items:center}
+  .linehead.cols-po,.lineitem.cols-po{grid-template-columns:1fr 70px 110px 32px}
+  .linehead.cols-mro,.lineitem.cols-mro{grid-template-columns:1fr 55px 80px 100px 32px}
   .linehead span{font-size:.6rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700}
   .linehead span:not(:first-child){text-align:center}
   .lineitem{margin-bottom:7px}.lineitem .num{text-align:right}
@@ -681,22 +683,27 @@ $("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal();})
 <script>
 /* ============ SHARED DOC LINE EDITOR ============ */
 function lineEditor(kind){
-  const showCost=kind==="po";
-  return `<div class="linehead"><span>Item</span><span>Qty</span><span>${showCost?'Unit cost (₦)':'Available'}</span><span></span></div>
+  const showCost=kind==="po", cls=showCost?"cols-po":"cols-mro";
+  const header=showCost
+    ? `<span>Item</span><span>Qty</span><span>Unit cost (₦)</span><span></span>`
+    : `<span>Item</span><span>Qty</span><span>Available</span><span>Unit cost (₦)</span><span></span>`;
+  return `<div class="linehead ${cls}">${header}</div>
     <div id="lineRows"></div>
     <button class="btn ghost sm" id="addLine" style="width:100%;border-style:dashed;margin-top:3px">+ Add line</button>`;
 }
 function renderLines(kind){
-  const showCost=kind==="po", c=$("lineRows"); if(!c)return; c.innerHTML="";
+  const showCost=kind==="po", cls=showCost?"cols-po":"cols-mro", c=$("lineRows"); if(!c)return; c.innerHTML="";
   draft.lines.forEach((l,idx)=>{
     const it=itemById(l.itemId);
     const avail=it?`${n2(it.qty)} ${esc(it.unit||"")}`:"—";
-    const r=document.createElement("div"); r.className="lineitem";
+    const unitCost=it?ngn.format(it.cost||0):"—";
+    const r=document.createElement("div"); r.className="lineitem "+cls;
     r.innerHTML=`<select data-i="${idx}" data-f="itemId"><option value="">— select item —</option>
         ${DB.items.map(i=>`<option value="${i.id}" ${i.id===l.itemId?'selected':''}>${esc(i.name)}${i.sku?' ('+esc(i.sku)+')':''}</option>`).join("")}</select>
       <input class="num" type="number" data-i="${idx}" data-f="qty" value="${l.qty}">
       ${showCost?`<input class="num" type="text" inputmode="numeric" data-i="${idx}" data-f="cost" value="${Number(l.cost||0).toLocaleString('en-US')}">`
-                :`<div style="font-size:.78rem;font-weight:700;text-align:center;color:${it&&(it.qty||0)<(l.qty||0)?'var(--red)':'var(--muted)'}">${avail}</div>`}
+                :`<div style="font-size:.78rem;font-weight:700;text-align:center;color:${it&&(it.qty||0)<(l.qty||0)?'var(--red)':'var(--muted)'}">${avail}</div>
+                  <div style="font-size:.78rem;font-weight:700;text-align:right;color:var(--muted)">${unitCost}</div>`}
       <button class="delbtn" data-del="${idx}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>`;
     c.appendChild(r);
   });
@@ -704,13 +711,18 @@ function renderLines(kind){
     const i=+e.target.dataset.i,f=e.target.dataset.f;
     if(f==="cost"){fmtCommasEl(e.target);draft.lines[i].cost=parseFloat(e.target.value.replace(/,/g,""))||0; updateDocTotal(kind);}
     else if(f==="qty"){draft.lines[i].qty=parseFloat(e.target.value)||0; updateDocTotal(kind);}
-    else{ draft.lines[i].itemId=e.target.value; const it=itemById(e.target.value); if(it&&showCost&&!draft.lines[i].cost)draft.lines[i].cost=it.cost||0; renderLines(kind); updateDocTotal(kind); }
+    else{ draft.lines[i].itemId=e.target.value; const it=itemById(e.target.value); if(it&&!draft.lines[i].cost)draft.lines[i].cost=it.cost||0; renderLines(kind); updateDocTotal(kind); }
   }));
   c.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{draft.lines.splice(+b.dataset.del,1);renderLines(kind);updateDocTotal(kind);}));
   updateDocTotal(kind);
 }
 function docTotal(){return draft.lines.reduce((s,l)=>s+(l.qty||0)*(l.cost||0),0);}
-function updateDocTotal(kind){const el=$("docTotal"); if(el) el.textContent= kind==="po"? ngn.format(docTotal()) : `${draft.lines.length} line${draft.lines.length===1?'':'s'}`;}
+function docTotalFromStock(){return draft.lines.reduce((s,l)=>{const it=itemById(l.itemId);return s+(l.qty||0)*(it?it.cost||0:0);},0);}
+function updateDocTotal(kind){
+  const el=$("docTotal"); if(!el)return;
+  el.textContent = kind==="po" ? ngn.format(docTotal())
+    : `${draft.lines.length} line${draft.lines.length===1?'':'s'} · ${ngn.format(docTotalFromStock())}`;
+}
 function sigBlock(){
   return `<div class="row2 mb">
       <div><span class="lab">Approved by</span><input id="d_appr" value="${esc(draft.approvedBy||"")}"></div>
@@ -881,7 +893,7 @@ function mroForm(){
         <div class="btnrow"><button class="btn" id="d_save">${isEdit?"Update requisition":"Save requisition"}</button><button class="btn ghost" id="d_cancel">Cancel</button></div>
       </div>
       <div class="card pad">
-        <h3>Items requested</h3><div class="sub"><b id="docTotal">0 lines</b> · availability shown per line</div>
+        <h3>Items requested</h3><div class="sub"><b id="docTotal">0 lines</b> · availability &amp; unit cost shown per line</div>
         ${lineEditor("mro")}
       </div>
     </div>`;
