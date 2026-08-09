@@ -60,6 +60,28 @@ insert into public.counters (kind, value) values ('po',0), ('mro',0)
 
 create index if not exists documents_kind_idx on public.documents (kind, created_at desc);
 
+create table if not exists public.bos_packages (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  description text default '',
+  components  jsonb not null default '[]'::jsonb,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+alter table public.bos_packages enable row level security;
+drop policy if exists bos_packages_rw on public.bos_packages;
+create policy bos_packages_rw on public.bos_packages for all to authenticated using (true) with check (true);
+
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'bos_packages'
+  ) then
+    alter publication supabase_realtime add table public.bos_packages;
+  end if;
+end $$;
+
 -- ============================================================
 -- COMPANY INVOICING
 -- ============================================================
@@ -228,6 +250,28 @@ insert into public.lif_counters (kind, value) values ('po',0), ('mro',0)
   on conflict (kind) do nothing;
 
 create index if not exists lif_documents_kind_idx on public.lif_documents (kind, created_at desc);
+
+create table if not exists public.lif_bos_packages (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  description text default '',
+  components  jsonb not null default '[]'::jsonb,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+alter table public.lif_bos_packages enable row level security;
+drop policy if exists lif_bos_packages_rw on public.lif_bos_packages;
+create policy lif_bos_packages_rw on public.lif_bos_packages for all to authenticated using (true) with check (true);
+
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'lif_bos_packages'
+  ) then
+    alter publication supabase_realtime add table public.lif_bos_packages;
+  end if;
+end $$;
 
 -- ============================================================
 -- LIF DEPLOYMENT COSTS (Phase 1 capital cost register)

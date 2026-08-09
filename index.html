@@ -260,7 +260,7 @@ const CO={name:"Kiru Energy Ltd",rc:"RC 1619891",addr:"44 Bourdillon Road, Ikoyi
 const UNITS=["Unit","Piece","Set","Meter","Coil","Roll","Lot","Pack","Litre","Kg","Bag","Carton"];
 const CATS=["Solar Panels","Inverters","Batteries","Solar Generators","BOS / Accessories","Cables & Conductors","Protection Devices","IoT & Monitoring","Tools & Consumables","Other"];
 
-let DB={items:[],pos:[],mros:[]};
+let DB={items:[],pos:[],mros:[],bosPackages:[]};
 let tab="dashboard";
 let draft=null;
 let SB=null, USER=null;
@@ -329,15 +329,17 @@ function docToLocal(d){
   return Object.assign(base,{requestedBy:d.requested_by||"",project:d.project||"",purpose:d.purpose||"",issuedDate:d.applied_date});
 }
 async function pull(){
-  const [ir,dr]=await Promise.all([
+  const [ir,dr,br]=await Promise.all([
     SB.from(tbl("items")).select("*").order("name"),
-    SB.from(tbl("documents")).select("*").order("created_at")
+    SB.from(tbl("documents")).select("*").order("created_at"),
+    SB.from(tbl("bos_packages")).select("*").order("name")
   ]);
-  if(ir.error||dr.error){ toast("Could not load data — check your connection"); setSync(false); return; }
+  if(ir.error||dr.error||br.error){ toast("Could not load data — check your connection"); setSync(false); return; }
   DB.items=(ir.data||[]).map(i=>({id:i.id,name:i.name,sku:i.sku||"",category:i.category||"",unit:i.unit||"Unit",
     qty:Number(i.qty)||0,cost:Number(i.cost)||0,reorder:Number(i.reorder)||0}));
   DB.pos=(dr.data||[]).filter(d=>d.kind==="po").map(docToLocal);
   DB.mros=(dr.data||[]).filter(d=>d.kind==="mro").map(docToLocal);
+  DB.bosPackages=(br.data||[]).map(p=>({id:p.id,name:p.name,description:p.description||"",components:Array.isArray(p.components)?p.components:[]}));
   setSync(true);
 }
 function setSync(ok){const d=$("syncDot"); if(d)d.className="syncdot"+(ok?"":" off");}
@@ -388,6 +390,22 @@ async function deleteDocDB(id){
   if(error){toast("Delete failed: "+error.message);return false;}
   await pull(); return true;
 }
+async function addPackageDB(o){
+  const {error}=await SB.from(tbl("bos_packages")).insert({name:o.name,description:o.description,components:o.components});
+  if(error){toast("Save failed: "+error.message);return false;}
+  await pull(); return true;
+}
+async function updatePackageDB(id,o){
+  const {error}=await SB.from(tbl("bos_packages")).update({name:o.name,description:o.description,components:o.components,updated_at:new Date().toISOString()}).eq("id",id);
+  if(error){toast("Update failed: "+error.message);return false;}
+  await pull(); return true;
+}
+async function deletePackageDB(id){
+  const {error}=await SB.from(tbl("bos_packages")).delete().eq("id",id);
+  if(error){toast("Delete failed: "+error.message);return false;}
+  await pull(); return true;
+}
+function packageCost(pkg){return (pkg.components||[]).reduce((s,c)=>{const it=itemById(c.itemId);return s+(c.qty||0)*(it?it.cost||0:0);},0);}
 function isAdmin(){return USER&&USER.email===(window.KIRU_CONFIG.ADMIN_EMAIL||"").toLowerCase();}
 
 /* ============ AUTH ============ */
@@ -437,7 +455,7 @@ function updateHeaderForModule(){
 
 async function setModule(mod){
   currentModule=mod;
-  DB={items:[],pos:[],mros:[]};
+  DB={items:[],pos:[],mros:[],bosPackages:[]};
   tab="dashboard";
   draft=null;
   updateHeaderForModule();
@@ -494,6 +512,7 @@ function subscribeLive(){
   SB.channel(ch)
     .on("postgres_changes",{event:"*",schema:"public",table:tbl("items")},async()=>{await pull();if(!draft)render();})
     .on("postgres_changes",{event:"*",schema:"public",table:tbl("documents")},async()=>{await pull();if(!draft)render();})
+    .on("postgres_changes",{event:"*",schema:"public",table:tbl("bos_packages")},async()=>{await pull();if(!draft)render();})
     .subscribe(st=>setSync(st==="SUBSCRIBED"));
 }
 document.addEventListener("DOMContentLoaded",()=>{
@@ -559,7 +578,7 @@ function applyTheme(t){root.setAttribute("data-theme",t);$("logo").src=LOGO[t];}
 applyTheme((window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light");
 $("themeToggle").addEventListener("click",()=>applyTheme(root.getAttribute("data-theme")==="dark"?"light":"dark"));
 
-const TABS=[["dashboard","Dashboard"],["items","Stock Items"],["po","Purchase Orders"],["mro","Requisitions"],["report","Inventory Report"],["data","Data"]];
+const TABS=[["dashboard","Dashboard"],["items","Stock Items"],["bos","BOS Packages"],["po","Purchase Orders"],["mro","Requisitions"],["report","Inventory Report"],["data","Data"]];
 function renderTabs(){
   $("tabs").innerHTML=TABS.map(([k,l])=>`<button class="tabbtn ${tab===k?'on':''}" data-tab="${k}">${l}</button>`).join("");
   $("tabs").querySelectorAll(".tabbtn").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;draft=null;render();}));
@@ -567,7 +586,7 @@ function renderTabs(){
 function render(){
   if(!currentModule){viewHome();return;}
   renderTabs();
-  ({dashboard:viewDashboard,items:viewItems,po:viewPO,mro:viewMRO,report:viewReport,data:viewData}[tab])();
+  ({dashboard:viewDashboard,items:viewItems,bos:viewBOS,po:viewPO,mro:viewMRO,report:viewReport,data:viewData}[tab])();
 }
 </script>
 <script>
@@ -679,6 +698,102 @@ function editItem(id){
 }
 function closeModal(){$("modal").classList.remove("show");}
 $("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal();});
+
+/* ============ BOS PACKAGES ============ */
+function viewBOS(){
+  if(draft&&draft.kind==="bos"){return bosForm();}
+  $("view").innerHTML=`
+    <div class="card pad">
+      <div class="btnrow" style="justify-content:space-between;margin-bottom:14px">
+        <div><h3>BOS Packages</h3><div class="sub" style="margin:0">Bundle components together for one-click selection on requisitions. Price is the live sum of each component's current stock cost.</div></div>
+        <button class="btn" id="newBOS">+ Create package</button>
+      </div>
+      ${DB.bosPackages.length?`<table class="grid"><thead><tr><th class="l">Package</th><th class="l">Components</th><th>Total cost</th><th class="c">Actions</th></tr></thead><tbody>
+        ${DB.bosPackages.map(p=>`<tr>
+          <td class="l">${esc(p.name)}${p.description?`<div style="font-size:.68rem;color:var(--muted);font-weight:500">${esc(p.description)}</div>`:''}</td>
+          <td class="l" style="font-weight:500">${(p.components||[]).length} item${(p.components||[]).length===1?'':'s'}</td>
+          <td>${ngn.format(packageCost(p))}</td>
+          <td class="c"><div class="btnrow" style="justify-content:center">
+            <button class="btn ghost sm" data-edit-bos="${p.id}">Edit</button>
+            <button class="btn danger sm" data-del-bos="${p.id}">Delete</button>
+          </div></td></tr>`).join("")}
+      </tbody></table>`:'<div class="empty">No BOS packages yet. Create one to speed up requisitions.</div>'}
+    </div>`;
+  $("newBOS").addEventListener("click",()=>{draft={kind:"bos",id:uid(),name:"",description:"",components:[{itemId:"",qty:1}]};viewBOS();});
+  $("view").querySelectorAll("[data-edit-bos]").forEach(b=>b.addEventListener("click",()=>{
+    const p=DB.bosPackages.find(x=>x.id===b.dataset.editBos); if(!p)return;
+    draft={kind:"bos",id:p.id,name:p.name,description:p.description||"",components:(p.components||[]).map(c=>({...c})),_isEdit:true};
+    viewBOS();
+  }));
+  $("view").querySelectorAll("[data-del-bos]").forEach(b=>b.addEventListener("click",async()=>{
+    const p=DB.bosPackages.find(x=>x.id===b.dataset.delBos); if(!p)return;
+    if(!confirm(`Delete package "${p.name}"? Requisitions already created from it are unaffected.`))return;
+    const ok=await deletePackageDB(p.id); if(ok){toast("Package deleted");viewBOS();}
+  }));
+}
+function renderBosLines(){
+  const c=$("bosRows"); if(!c)return; c.innerHTML="";
+  draft.components.forEach((cmp,idx)=>{
+    const it=itemById(cmp.itemId);
+    const unitCost=it?ngn.format(it.cost||0):"—";
+    const r=document.createElement("div"); r.className="lineitem cols-po";
+    r.innerHTML=`<select data-i="${idx}" data-f="itemId"><option value="">— select item —</option>
+        ${DB.items.map(i=>`<option value="${i.id}" ${i.id===cmp.itemId?'selected':''}>${esc(i.name)}${i.sku?' ('+esc(i.sku)+')':''}</option>`).join("")}</select>
+      <input class="num" type="number" data-i="${idx}" data-f="qty" value="${cmp.qty}">
+      <div style="font-size:.78rem;font-weight:700;text-align:right;color:var(--muted)">${unitCost}</div>
+      <button class="delbtn" data-del="${idx}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>`;
+    c.appendChild(r);
+  });
+  c.querySelectorAll("select,input").forEach(el=>el.addEventListener("input",e=>{
+    const i=+e.target.dataset.i,f=e.target.dataset.f;
+    if(f==="qty") draft.components[i].qty=parseFloat(e.target.value)||0;
+    else { draft.components[i].itemId=e.target.value; renderBosLines(); }
+    updateBosTotal();
+  }));
+  c.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{draft.components.splice(+b.dataset.del,1);renderBosLines();updateBosTotal();}));
+  updateBosTotal();
+}
+function updateBosTotal(){
+  const el=$("bosTotal"); if(!el)return;
+  const total=draft.components.reduce((s,c)=>{const it=itemById(c.itemId);return s+(c.qty||0)*(it?it.cost||0:0);},0);
+  el.textContent=ngn.format(total);
+}
+function bosForm(){
+  const isEdit=!!draft._isEdit;
+  $("view").innerHTML=`
+    <div class="split">
+      <div class="card pad stick">
+        <h3>${isEdit?"Edit package":"Create BOS package"}</h3><div class="sub">Price is the live sum of component stock costs — updates automatically as item costs change.</div>
+        <div class="mb"><span class="lab">Package name</span><input id="b_name" value="${esc(draft.name)}" placeholder="e.g. Standard 5kW BOS Package"></div>
+        <div class="mb"><span class="lab">Description <small>(optional)</small></span><textarea id="b_desc">${esc(draft.description)}</textarea></div>
+        <div class="btnrow"><button class="btn" id="b_save">${isEdit?"Update package":"Save package"}</button><button class="btn ghost" id="b_cancel">Cancel</button></div>
+      </div>
+      <div class="card pad">
+        <h3>Components</h3><div class="sub"><b id="bosTotal">₦0</b> total</div>
+        <div class="linehead cols-po"><span>Item</span><span>Qty</span><span>Unit cost (₦)</span><span></span></div>
+        <div id="bosRows"></div>
+        <button class="btn ghost sm" id="addBosLine" style="width:100%;border-style:dashed;margin-top:3px">+ Add component</button>
+      </div>
+    </div>`;
+  renderBosLines();
+  $("b_name").addEventListener("input",e=>draft.name=e.target.value);
+  $("b_desc").addEventListener("input",e=>draft.description=e.target.value);
+  $("addBosLine").addEventListener("click",()=>{draft.components.push({itemId:"",qty:1});renderBosLines();});
+  $("b_cancel").addEventListener("click",()=>{draft=null;viewBOS();});
+  $("b_save").addEventListener("click",async()=>{
+    const name=$("b_name").value.trim(); if(!name){toast("Enter a package name");return;}
+    const components=draft.components.filter(c=>c.itemId&&(c.qty||0)>0);
+    if(!components.length){toast("Add at least one component");return;}
+    const payload={name,description:$("b_desc").value.trim(),components};
+    if(isEdit){
+      const ok=await updatePackageDB(draft.id,payload);
+      if(ok){toast("Package updated");draft=null;viewBOS();}
+    } else {
+      const ok=await addPackageDB(payload);
+      if(ok){toast("Package saved");draft=null;viewBOS();}
+    }
+  });
+}
 </script>
 <script>
 /* ============ SHARED DOC LINE EDITOR ============ */
@@ -894,6 +1009,10 @@ function mroForm(){
       </div>
       <div class="card pad">
         <h3>Items requested</h3><div class="sub"><b id="docTotal">0 lines</b> · availability &amp; unit cost shown per line</div>
+        ${DB.bosPackages.length?`<div class="mb" style="display:flex;gap:8px;align-items:flex-end">
+          <div style="flex:1"><span class="lab">Add from BOS package</span><select id="pkgPick"><option value="">— select package —</option>${DB.bosPackages.map(p=>`<option value="${p.id}">${esc(p.name)} · ${ngn.format(packageCost(p))}</option>`).join("")}</select></div>
+          <button class="btn ghost sm" id="pkgAdd" style="height:36px">+ Add</button>
+        </div>`:''}
         ${lineEditor("mro")}
       </div>
     </div>`;
@@ -904,6 +1023,20 @@ function mroForm(){
   $("d_purpose").addEventListener("change",e=>draft.purpose=e.target.value);
   $("d_note").addEventListener("input",e=>draft.note=e.target.value);
   $("addLine").addEventListener("click",()=>{draft.lines.push({itemId:"",qty:1,cost:0});renderLines("mro");});
+  if($("pkgAdd")) $("pkgAdd").addEventListener("click",()=>{
+    const pid=$("pkgPick").value; if(!pid)return;
+    const pkg=DB.bosPackages.find(p=>p.id===pid); if(!pkg)return;
+    draft.lines=draft.lines.filter(l=>l.itemId);
+    (pkg.components||[]).forEach(c=>{
+      const existing=draft.lines.find(l=>l.itemId===c.itemId);
+      if(existing) existing.qty=(existing.qty||0)+(c.qty||0);
+      else draft.lines.push({itemId:c.itemId, qty:c.qty||0, cost:(itemById(c.itemId)||{}).cost||0});
+    });
+    if(!draft.lines.length) draft.lines.push({itemId:"",qty:1,cost:0});
+    renderLines("mro");
+    toast(`${pkg.name} added (${(pkg.components||[]).length} item${(pkg.components||[]).length===1?'':'s'})`);
+    $("pkgPick").value="";
+  });
   $("d_cancel").addEventListener("click",()=>{draft=null;viewMRO();});
   $("d_save").addEventListener("click",async()=>{
     const lines=draft.lines.filter(l=>l.itemId&&(l.qty||0)>0);
