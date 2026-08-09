@@ -990,16 +990,22 @@ async function receivePO(id){
 }
 
 /* ============ MATERIAL REQUISITIONS ============ */
+let mroFilter="";
 function viewMRO(){
   if(draft&&draft.kind==="mro"){return mroForm();}
+  const q=mroFilter.trim().toLowerCase();
+  const list=DB.mros.filter(m=>!q||[m.no,m.requestedBy,m.project,m.purpose].filter(Boolean).join(" ").toLowerCase().includes(q));
   $("view").innerHTML=`
     <div class="card pad">
       <div class="btnrow" style="justify-content:space-between;margin-bottom:14px">
         <div><h3>Material Requisition Orders</h3><div class="sub" style="margin:0">Issuing a requisition removes its items from stock.</div></div>
         <button class="btn" id="newMRO">+ Create requisition</button>
       </div>
-      ${DB.mros.length?`<table class="grid"><thead><tr><th class="l">MRO No.</th><th class="l">Requested by</th><th class="l">Customer Name</th><th class="l">Purpose</th><th class="l">Date</th><th>Lines</th><th class="c">Status</th><th class="c">Actions</th></tr></thead><tbody>
-        ${DB.mros.slice().reverse().map(m=>`<tr>
+      <div class="searchbar" style="margin-bottom:14px">
+        <input id="m_search" placeholder="Search MRO no., requested by, customer name, or purpose" value="${esc(mroFilter)}">
+      </div>
+      ${list.length?`<table class="grid"><thead><tr><th class="l">MRO No.</th><th class="l">Requested by</th><th class="l">Customer Name</th><th class="l">Purpose</th><th class="l">Date</th><th>Lines</th><th class="c">Status</th><th class="c">Actions</th></tr></thead><tbody>
+        ${list.slice().reverse().map(m=>`<tr>
           <td class="l">${esc(m.no)}</td><td class="l" style="font-weight:500">${esc(m.requestedBy||"—")}</td><td class="l" style="font-weight:500">${esc(m.project||"—")}</td>
           <td class="l" style="font-weight:500">${esc(m.purpose||"—")}</td>
           <td class="l" style="font-weight:500">${fmtDate(m.date)}</td><td>${m.lines.length}</td>
@@ -1011,8 +1017,9 @@ function viewMRO(){
             <button class="btn ghost sm" data-print="${m.id}">Download</button>
             ${isAdmin()?`<button class="btn danger sm" data-del-mro="${m.id}" title="Delete MRO">Delete</button>`:''}
           </div></td></tr>`).join("")}
-      </tbody></table>`:'<div class="empty">No requisitions yet.</div>'}
+      </tbody></table>`:`<div class="empty">${q?"No requisitions match your search.":"No requisitions yet."}</div>`}
     </div>`;
+  $("m_search").addEventListener("input",e=>{mroFilter=e.target.value;const p=e.target.selectionStart;viewMRO();const s=$("m_search");s.focus();s.setSelectionRange(p,p);});
   $("newMRO").addEventListener("click",()=>{
     if(!DB.items.length){toast("Add stock items first");return;}
     draft={kind:"mro",id:uid(),no:"",date:today(),requestedBy:"",project:"",purpose:"",note:"",lines:[{itemId:"",qty:1,cost:0}],preparedBy:"",approvedBy:"",approverTitle:"",sig:null};
