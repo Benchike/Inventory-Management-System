@@ -578,7 +578,7 @@ function applyTheme(t){root.setAttribute("data-theme",t);$("logo").src=LOGO[t];}
 applyTheme((window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light");
 $("themeToggle").addEventListener("click",()=>applyTheme(root.getAttribute("data-theme")==="dark"?"light":"dark"));
 
-const TABS=[["dashboard","Dashboard"],["items","Stock Items"],["bos","BOS Packages"],["po","Purchase Orders"],["mro","Requisitions"],["report","Inventory Report"],["data","Data"]];
+const TABS=[["dashboard","Dashboard"],["items","Stock Items"],["po","Purchase Orders"],["mro","Requisitions"],["report","Inventory Report"],["data","Data"]];
 function renderTabs(){
   $("tabs").innerHTML=TABS.map(([k,l])=>`<button class="tabbtn ${tab===k?'on':''}" data-tab="${k}">${l}</button>`).join("");
   $("tabs").querySelectorAll(".tabbtn").forEach(b=>b.addEventListener("click",()=>{tab=b.dataset.tab;draft=null;render();}));
@@ -586,7 +586,7 @@ function renderTabs(){
 function render(){
   if(!currentModule){viewHome();return;}
   renderTabs();
-  ({dashboard:viewDashboard,items:viewItems,bos:viewBOS,po:viewPO,mro:viewMRO,report:viewReport,data:viewData}[tab])();
+  ({dashboard:viewDashboard,items:viewItems,po:viewPO,mro:viewMRO,report:viewReport,data:viewData}[tab])();
 }
 </script>
 <script>
@@ -620,18 +620,41 @@ function viewDashboard(){
 function allTx(){
   const out=[];
   DB.pos.filter(p=>p.status==="received").forEach(p=>p.lines.forEach(l=>out.push({date:p.receivedDate||p.date,type:"IN",itemId:l.itemId,qty:l.qty,cost:l.cost,ref:p.no,party:p.supplier})));
-  DB.mros.filter(m=>m.status==="issued").forEach(m=>m.lines.forEach(l=>{const it=itemById(l.itemId);out.push({date:m.issuedDate||m.date,type:"OUT",itemId:l.itemId,qty:l.qty,cost:it?it.cost:0,ref:m.no,party:m.project||m.requestedBy});}));
+  DB.mros.filter(m=>m.status==="issued").forEach(m=>m.lines.forEach(l=>{
+    if(l.packageId){
+      const pkg=pkgById(l.packageId);
+      (pkg?pkg.components:[]).forEach(c=>{
+        const it=itemById(c.itemId);
+        out.push({date:m.issuedDate||m.date,type:"OUT",itemId:c.itemId,qty:(c.qty||0)*(l.qty||0),cost:it?it.cost:0,ref:m.no,party:m.project||m.requestedBy});
+      });
+    } else {
+      const it=itemById(l.itemId);
+      out.push({date:m.issuedDate||m.date,type:"OUT",itemId:l.itemId,qty:l.qty,cost:it?it.cost:0,ref:m.no,party:m.project||m.requestedBy});
+    }
+  }));
   return out.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
 }
 
 /* ============ STOCK ITEMS ============ */
-let itemFilter="",itemCat="";
+let itemFilter="",itemCat="",itemsSubTab="items";
+function itemsSubtabsHTML(){
+  return `<div class="btnrow" style="gap:8px;margin-bottom:14px">
+    <button class="tabbtn ${itemsSubTab==='items'?'on':''}" data-isub="items">📦 Stock Items</button>
+    <button class="tabbtn ${itemsSubTab==='packages'?'on':''}" data-isub="packages">🧩 BOS Packages</button>
+  </div>`;
+}
+function wireItemsSubtabs(){
+  $("view").querySelectorAll("[data-isub]").forEach(b=>b.addEventListener("click",()=>{itemsSubTab=b.dataset.isub;draft=null;viewItems();}));
+}
 function viewItems(){
+  if(draft&&draft.kind==="bos"){return bosForm();}
+  if(itemsSubTab==="packages"){return viewBOS();}
   const list=DB.items.filter(i=>{
     const t=(i.name+" "+(i.sku||"")+" "+(i.category||"")).toLowerCase();
     return (!itemFilter||t.includes(itemFilter.toLowerCase()))&&(!itemCat||i.category===itemCat);
   });
   $("view").innerHTML=`
+    ${itemsSubtabsHTML()}
     <div class="split">
       <div class="card pad stick">
         <h3>Add stock item</h3><div class="sub">Create the catalogue first; stock quantities come from purchase orders.</div>
@@ -660,6 +683,7 @@ function viewItems(){
         </tbody></table>`:'<div class="empty">No items yet. Add your first stock item on the left.</div>'}
       </div>
     </div>`;
+  wireItemsSubtabs();
   $("i_cost").addEventListener("input",e=>fmtCommasEl(e.target));
   $("i_search").addEventListener("input",e=>{itemFilter=e.target.value;const p=e.target.selectionStart;viewItems();const s=$("i_search");s.focus();s.setSelectionRange(p,p);});
   $("i_catf").addEventListener("change",e=>{itemCat=e.target.value;viewItems();});
@@ -703,9 +727,10 @@ $("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal();})
 function viewBOS(){
   if(draft&&draft.kind==="bos"){return bosForm();}
   $("view").innerHTML=`
+    ${itemsSubtabsHTML()}
     <div class="card pad">
       <div class="btnrow" style="justify-content:space-between;margin-bottom:14px">
-        <div><h3>BOS Packages</h3><div class="sub" style="margin:0">Bundle components together for one-click selection on requisitions. Price is the live sum of each component's current stock cost.</div></div>
+        <div><h3>BOS Packages</h3><div class="sub" style="margin:0">Bundle components together so the whole package can be selected as one unit on a requisition. Price is the live sum of each component's current stock cost.</div></div>
         <button class="btn" id="newBOS">+ Create package</button>
       </div>
       ${DB.bosPackages.length?`<table class="grid"><thead><tr><th class="l">Package</th><th class="l">Components</th><th>Total cost</th><th class="c">Actions</th></tr></thead><tbody>
@@ -719,6 +744,7 @@ function viewBOS(){
           </div></td></tr>`).join("")}
       </tbody></table>`:'<div class="empty">No BOS packages yet. Create one to speed up requisitions.</div>'}
     </div>`;
+  wireItemsSubtabs();
   $("newBOS").addEventListener("click",()=>{draft={kind:"bos",id:uid(),name:"",description:"",components:[{itemId:"",qty:1}]};viewBOS();});
   $("view").querySelectorAll("[data-edit-bos]").forEach(b=>b.addEventListener("click",()=>{
     const p=DB.bosPackages.find(x=>x.id===b.dataset.editBos); if(!p)return;
@@ -806,20 +832,40 @@ function lineEditor(kind){
     <div id="lineRows"></div>
     <button class="btn ghost sm" id="addLine" style="width:100%;border-style:dashed;margin-top:3px">+ Add line</button>`;
 }
+function pkgById(id){return DB.bosPackages.find(p=>p.id===id);}
+function packageFulfillable(pkg){
+  if(!pkg||!(pkg.components||[]).length) return 0;
+  return Math.min(...pkg.components.map(c=>{
+    const it=itemById(c.itemId);
+    return (it&&c.qty>0) ? Math.floor((it.qty||0)/c.qty) : 0;
+  }));
+}
 function renderLines(kind){
   const showCost=kind==="po", cls=showCost?"cols-po":"cols-mro", c=$("lineRows"); if(!c)return; c.innerHTML="";
   draft.lines.forEach((l,idx)=>{
-    const it=itemById(l.itemId);
-    const avail=it?`${n2(it.qty)} ${esc(it.unit||"")}`:"—";
-    const unitCost=it?ngn.format(it.cost||0):"—";
     const r=document.createElement("div"); r.className="lineitem "+cls;
-    r.innerHTML=`<select data-i="${idx}" data-f="itemId"><option value="">— select item —</option>
-        ${DB.items.map(i=>`<option value="${i.id}" ${i.id===l.itemId?'selected':''}>${esc(i.name)}${i.sku?' ('+esc(i.sku)+')':''}</option>`).join("")}</select>
-      <input class="num" type="number" data-i="${idx}" data-f="qty" value="${l.qty}">
-      ${showCost?`<input class="num" type="text" inputmode="numeric" data-i="${idx}" data-f="cost" value="${Number(l.cost||0).toLocaleString('en-US')}">`
-                :`<div style="font-size:.78rem;font-weight:700;text-align:center;color:${it&&(it.qty||0)<(l.qty||0)?'var(--red)':'var(--muted)'}">${avail}</div>
-                  <div style="font-size:.78rem;font-weight:700;text-align:right;color:var(--muted)">${unitCost}</div>`}
-      <button class="delbtn" data-del="${idx}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>`;
+    if(l.packageId){
+      const pkg=pkgById(l.packageId);
+      const unitCost=pkg?ngn.format(packageCost(pkg)):"—";
+      const fulfillable=pkg?packageFulfillable(pkg):0;
+      r.innerHTML=`<div style="font-size:.82rem;font-weight:700;padding:8px 0">🧩 ${esc(pkg?pkg.name:"(package removed)")}<div style="font-size:.66rem;color:var(--muted);font-weight:500">BOS package · ${pkg?(pkg.components||[]).length:0} components</div></div>
+        <input class="num" type="number" data-i="${idx}" data-f="qty" value="${l.qty}">
+        ${showCost?`<div style="font-size:.78rem;font-weight:700;text-align:center;color:var(--muted)">—</div>`
+                  :`<div style="font-size:.78rem;font-weight:700;text-align:center;color:${fulfillable<(l.qty||0)?'var(--red)':'var(--muted)'}">${fulfillable} pkgs</div>
+                    <div style="font-size:.78rem;font-weight:700;text-align:right;color:var(--muted)">${unitCost}</div>`}
+        <button class="delbtn" data-del="${idx}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>`;
+    } else {
+      const it=itemById(l.itemId);
+      const avail=it?`${n2(it.qty)} ${esc(it.unit||"")}`:"—";
+      const unitCost=it?ngn.format(it.cost||0):"—";
+      r.innerHTML=`<select data-i="${idx}" data-f="itemId"><option value="">— select item —</option>
+          ${DB.items.map(i=>`<option value="${i.id}" ${i.id===l.itemId?'selected':''}>${esc(i.name)}${i.sku?' ('+esc(i.sku)+')':''}</option>`).join("")}</select>
+        <input class="num" type="number" data-i="${idx}" data-f="qty" value="${l.qty}">
+        ${showCost?`<input class="num" type="text" inputmode="numeric" data-i="${idx}" data-f="cost" value="${Number(l.cost||0).toLocaleString('en-US')}">`
+                  :`<div style="font-size:.78rem;font-weight:700;text-align:center;color:${it&&(it.qty||0)<(l.qty||0)?'var(--red)':'var(--muted)'}">${avail}</div>
+                    <div style="font-size:.78rem;font-weight:700;text-align:right;color:var(--muted)">${unitCost}</div>`}
+        <button class="delbtn" data-del="${idx}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>`;
+    }
     c.appendChild(r);
   });
   c.querySelectorAll("select,input").forEach(el=>el.addEventListener("input",e=>{
@@ -832,7 +878,10 @@ function renderLines(kind){
   updateDocTotal(kind);
 }
 function docTotal(){return draft.lines.reduce((s,l)=>s+(l.qty||0)*(l.cost||0),0);}
-function docTotalFromStock(){return draft.lines.reduce((s,l)=>{const it=itemById(l.itemId);return s+(l.qty||0)*(it?it.cost||0:0);},0);}
+function docTotalFromStock(){return draft.lines.reduce((s,l)=>{
+  if(l.packageId){ const pkg=pkgById(l.packageId); return s+(l.qty||0)*(pkg?packageCost(pkg):0); }
+  const it=itemById(l.itemId); return s+(l.qty||0)*(it?it.cost||0:0);
+},0);}
 function updateDocTotal(kind){
   const el=$("docTotal"); if(!el)return;
   el.textContent = kind==="po" ? ngn.format(docTotal())
@@ -1026,20 +1075,17 @@ function mroForm(){
   if($("pkgAdd")) $("pkgAdd").addEventListener("click",()=>{
     const pid=$("pkgPick").value; if(!pid)return;
     const pkg=DB.bosPackages.find(p=>p.id===pid); if(!pkg)return;
-    draft.lines=draft.lines.filter(l=>l.itemId);
-    (pkg.components||[]).forEach(c=>{
-      const existing=draft.lines.find(l=>l.itemId===c.itemId);
-      if(existing) existing.qty=(existing.qty||0)+(c.qty||0);
-      else draft.lines.push({itemId:c.itemId, qty:c.qty||0, cost:(itemById(c.itemId)||{}).cost||0});
-    });
-    if(!draft.lines.length) draft.lines.push({itemId:"",qty:1,cost:0});
+    draft.lines=draft.lines.filter(l=>l.itemId||l.packageId);
+    const existing=draft.lines.find(l=>l.packageId===pid);
+    if(existing) existing.qty=(existing.qty||0)+1;
+    else draft.lines.push({packageId:pid, qty:1, cost:0});
     renderLines("mro");
-    toast(`${pkg.name} added (${(pkg.components||[]).length} item${(pkg.components||[]).length===1?'':'s'})`);
+    toast(`${pkg.name} added as one package line`);
     $("pkgPick").value="";
   });
   $("d_cancel").addEventListener("click",()=>{draft=null;viewMRO();});
   $("d_save").addEventListener("click",async()=>{
-    const lines=draft.lines.filter(l=>l.itemId&&(l.qty||0)>0);
+    const lines=draft.lines.filter(l=>(l.itemId||l.packageId)&&(l.qty||0)>0);
     if(!lines.length){toast("Add at least one item line");return;}
     if(!draft.requestedBy.trim()){toast("Enter who is requesting");return;}
     if(!draft.approvedBy.trim()){toast("Approver name is required");return;}
@@ -1053,11 +1099,24 @@ function mroForm(){
     }
   });
 }
+function lineShortfall(l){
+  if(l.packageId){
+    const pkg=pkgById(l.packageId);
+    if(!pkg) return true;
+    return (pkg.components||[]).some(c=>{const it=itemById(c.itemId);return !it||(it.qty||0)<(c.qty||0)*(l.qty||0);});
+  }
+  const it=itemById(l.itemId);
+  return !it||(it.qty||0)<(l.qty||0);
+}
+function lineLabel(l){
+  if(l.packageId){const pkg=pkgById(l.packageId);return pkg?pkg.name:"unknown package";}
+  const it=itemById(l.itemId);return it?it.name:"unknown item";
+}
 async function issueMRO(id){
   const m=DB.mros.find(x=>x.id===id); if(!m||m.status==="issued")return;
-  const short=m.lines.filter(l=>{const it=itemById(l.itemId);return !it||(it.qty||0)<(l.qty||0);});
+  const short=m.lines.filter(lineShortfall);
   if(short.length){
-    const names=short.map(l=>{const it=itemById(l.itemId);return it?it.name:"unknown item";}).join(", ");
+    const names=short.map(lineLabel).join(", ");
     if(!confirm("Insufficient stock for: "+names+".\nIssue anyway (stock will go negative)?"))return;
   } else if(!confirm("Issue "+m.no+"? This removes the items from stock.")) return;
   const ok=await applyDocDB(id); if(ok){toast(m.no+" issued — stock updated"); viewMRO();}
@@ -1100,9 +1159,25 @@ function docHTML_PO(p){
 }
 function docHTML_MRO(m){
   if(!m)return "";
-  const rows=m.lines.map((l,i)=>{const it=itemById(l.itemId);
-    return `<tr><td class="c">${i+1}</td><td class="l">${esc(it?it.name:"(item removed)")}${it&&it.sku?`<div style="font-size:9.5px;color:#8392a5;font-weight:500">${esc(it.sku)}</div>`:""}</td>
-      <td class="c">${esc(it?it.category:"")}</td><td class="c">${esc(it?it.unit:"")}</td><td>${n2(l.qty)}</td></tr>`;}).join("");
+  let sn=0;
+  const rows=m.lines.map(l=>{
+    sn++;
+    if(l.packageId){
+      const pkg=pkgById(l.packageId);
+      const header=`<tr><td class="c">${sn}</td><td class="l"><b>🧩 ${esc(pkg?pkg.name:"(package removed)")}</b><div style="font-size:9.5px;color:#8392a5;font-weight:500">BOS package</div></td>
+        <td class="c">—</td><td class="c">Package</td><td>${n2(l.qty)}</td></tr>`;
+      const subRows=pkg?(pkg.components||[]).map(c=>{
+        const it=itemById(c.itemId);
+        return `<tr><td class="c"></td><td class="l" style="padding-left:22px;font-size:11px;color:#8392a5">↳ ${esc(it?it.name:"(item removed)")}</td>
+          <td class="c" style="font-size:11px;color:#8392a5">${esc(it?it.category:"")}</td><td class="c" style="font-size:11px;color:#8392a5">${esc(it?it.unit:"")}</td>
+          <td style="font-size:11px;color:#8392a5">${n2((c.qty||0)*(l.qty||0))}</td></tr>`;
+      }).join(""):"";
+      return header+subRows;
+    }
+    const it=itemById(l.itemId);
+    return `<tr><td class="c">${sn}</td><td class="l">${esc(it?it.name:"(item removed)")}${it&&it.sku?`<div style="font-size:9.5px;color:#8392a5;font-weight:500">${esc(it.sku)}</div>`:""}</td>
+      <td class="c">${esc(it?it.category:"")}</td><td class="c">${esc(it?it.unit:"")}</td><td>${n2(l.qty)}</td></tr>`;
+  }).join("");
   return `<div class="docwrap">
     ${docHead("MATERIAL REQUISITION",`<b>MRO No:</b> ${esc(m.no)}<br><b>Date:</b> ${fmtDate(m.date)}${m.issuedDate?`<br><b>Issued:</b> ${fmtDate(m.issuedDate)}`:""}<br><b>Status:</b> ${m.status==="issued"?"Issued from stock":"Awaiting issue"}`)}
     <div class="doc-parties">

@@ -372,7 +372,7 @@ end $$;
 
 create or replace function public.apply_document(p_id uuid)
 returns void language plpgsql security definer as $$
-declare d record; ln jsonb;
+declare d record; ln jsonb; pkg record; comp jsonb;
 begin
   select * into d from public.documents where id = p_id for update;
   if d is null then raise exception 'Document not found'; end if;
@@ -384,6 +384,16 @@ begin
              cost = case when coalesce((ln->>'cost')::numeric,0) > 0 then (ln->>'cost')::numeric else cost end,
              updated_at = now()
        where id = (ln->>'itemId')::uuid;
+    elsif (ln ? 'packageId') and (ln->>'packageId') is not null then
+      select * into pkg from public.bos_packages where id = (ln->>'packageId')::uuid;
+      if pkg is not null then
+        for comp in select * from jsonb_array_elements(pkg.components) loop
+          update public.items
+             set qty = coalesce(qty,0) - coalesce((comp->>'qty')::numeric,0) * coalesce((ln->>'qty')::numeric,0),
+                 updated_at = now()
+           where id = (comp->>'itemId')::uuid;
+        end loop;
+      end if;
     else
       update public.items
          set qty = coalesce(qty,0) - coalesce((ln->>'qty')::numeric,0),
@@ -415,7 +425,7 @@ end $$;
 
 create or replace function public.lif_apply_document(p_id uuid)
 returns void language plpgsql security definer as $$
-declare d record; ln jsonb;
+declare d record; ln jsonb; pkg record; comp jsonb;
 begin
   select * into d from public.lif_documents where id = p_id for update;
   if d is null then raise exception 'Document not found'; end if;
@@ -427,6 +437,16 @@ begin
              cost = case when coalesce((ln->>'cost')::numeric,0) > 0 then (ln->>'cost')::numeric else cost end,
              updated_at = now()
        where id = (ln->>'itemId')::uuid;
+    elsif (ln ? 'packageId') and (ln->>'packageId') is not null then
+      select * into pkg from public.lif_bos_packages where id = (ln->>'packageId')::uuid;
+      if pkg is not null then
+        for comp in select * from jsonb_array_elements(pkg.components) loop
+          update public.lif_items
+             set qty = coalesce(qty,0) - coalesce((comp->>'qty')::numeric,0) * coalesce((ln->>'qty')::numeric,0),
+                 updated_at = now()
+           where id = (comp->>'itemId')::uuid;
+        end loop;
+      end if;
     else
       update public.lif_items
          set qty = coalesce(qty,0) - coalesce((ln->>'qty')::numeric,0),
