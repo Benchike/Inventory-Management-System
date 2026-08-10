@@ -995,11 +995,38 @@ async function receivePO(id){
 }
 
 /* ============ MATERIAL REQUISITIONS ============ */
-let mroFilter="";
+let mroFilter="",mroSort="";
+const MRO_SORTS=[
+  ["","Newest first"],
+  ["date_desc","Date (newest)"],
+  ["date_asc","Date (oldest)"],
+  ["name_asc","Customer Name (A–Z)"],
+  ["name_desc","Customer Name (Z–A)"],
+  ["no_asc","MRO No. (A–Z)"],
+  ["no_desc","MRO No. (Z–A)"],
+  ["requester_asc","Requested by (A–Z)"],
+  ["status","Status (Draft first)"]
+];
+function sortMros(list){
+  const arr=list.slice();
+  const cmp=(x,y)=>x.localeCompare(y,undefined,{numeric:true,sensitivity:"base"});
+  switch(mroSort){
+    case "date_desc": arr.sort((a,b)=>cmp(b.date||"",a.date||"")); break;
+    case "date_asc": arr.sort((a,b)=>cmp(a.date||"",b.date||"")); break;
+    case "name_asc": arr.sort((a,b)=>cmp(a.project||"",b.project||"")); break;
+    case "name_desc": arr.sort((a,b)=>cmp(b.project||"",a.project||"")); break;
+    case "no_asc": arr.sort((a,b)=>cmp(a.no||"",b.no||"")); break;
+    case "no_desc": arr.sort((a,b)=>cmp(b.no||"",a.no||"")); break;
+    case "requester_asc": arr.sort((a,b)=>cmp(a.requestedBy||"",b.requestedBy||"")); break;
+    case "status": arr.sort((a,b)=>cmp(a.status||"",b.status||"")); break;
+    default: arr.reverse();
+  }
+  return arr;
+}
 function viewMRO(){
   if(draft&&draft.kind==="mro"){return mroForm();}
   const q=mroFilter.trim().toLowerCase();
-  const list=DB.mros.filter(m=>!q||[m.no,m.requestedBy,m.project,m.purpose].filter(Boolean).join(" ").toLowerCase().includes(q));
+  const list=sortMros(DB.mros.filter(m=>!q||[m.no,m.requestedBy,m.project,m.purpose].filter(Boolean).join(" ").toLowerCase().includes(q)));
   $("view").innerHTML=`
     <div class="card pad">
       <div class="btnrow" style="justify-content:space-between;margin-bottom:14px">
@@ -1008,9 +1035,10 @@ function viewMRO(){
       </div>
       <div class="searchbar" style="margin-bottom:14px">
         <input id="m_search" placeholder="Search MRO no., requested by, customer name, or purpose" value="${esc(mroFilter)}">
+        <select id="m_sort">${MRO_SORTS.map(([v,l])=>`<option value="${v}" ${mroSort===v?'selected':''}>${l}</option>`).join("")}</select>
       </div>
       ${list.length?`<table class="grid"><thead><tr><th class="l">MRO No.</th><th class="l">Requested by</th><th class="l">Customer Name</th><th class="l">Purpose</th><th class="l">Date</th><th>Lines</th><th class="c">Status</th><th class="c">Actions</th></tr></thead><tbody>
-        ${list.slice().reverse().map(m=>`<tr>
+        ${list.map(m=>`<tr>
           <td class="l">${esc(m.no)}</td><td class="l" style="font-weight:500">${esc(m.requestedBy||"—")}</td><td class="l" style="font-weight:500">${esc(m.project||"—")}</td>
           <td class="l" style="font-weight:500">${esc(m.purpose||"—")}</td>
           <td class="l" style="font-weight:500">${fmtDate(m.date)}</td><td>${m.lines.length}</td>
@@ -1025,6 +1053,7 @@ function viewMRO(){
       </tbody></table>`:`<div class="empty">${q?"No requisitions match your search.":"No requisitions yet."}</div>`}
     </div>`;
   $("m_search").addEventListener("input",e=>{mroFilter=e.target.value;const p=e.target.selectionStart;viewMRO();const s=$("m_search");s.focus();s.setSelectionRange(p,p);});
+  $("m_sort").addEventListener("change",e=>{mroSort=e.target.value;viewMRO();});
   $("newMRO").addEventListener("click",()=>{
     if(!DB.items.length){toast("Add stock items first");return;}
     draft={kind:"mro",id:uid(),no:"",date:today(),requestedBy:"",project:"",purpose:"",note:"",lines:[{itemId:"",qty:1,cost:0}],preparedBy:"",approvedBy:"",approverTitle:"",sig:null};
