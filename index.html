@@ -380,6 +380,11 @@ async function applyDocDB(id){
   if(error){toast("Failed: "+error.message);return false;}
   await pull(); return true;
 }
+async function unissueDocDB(id){
+  const {error}=await SB.rpc(rpcName("unissue_document"),{p_id:id});
+  if(error){toast("Could not reopen: "+error.message);return false;}
+  await pull(); return true;
+}
 async function uploadReceiptDB(id,dataUrl){
   const {error}=await SB.from(tbl("documents")).update({payment_receipt:dataUrl}).eq("id",id);
   if(error){toast("Upload failed: "+error.message);return false;}
@@ -1012,7 +1017,7 @@ function viewMRO(){
           <td class="c"><span class="pill ${m.status==='issued'?'done':'draft'}">${m.status==='issued'?'ISSUED':'DRAFT'}</span></td>
           <td class="c"><div class="btnrow" style="justify-content:center">
             <button class="btn ghost sm" data-view="${m.id}">View</button>
-            ${m.status!=='issued'?`<button class="btn ghost sm" data-edit-mro="${m.id}">Edit</button>`:''}
+            <button class="btn ghost sm" data-edit-mro="${m.id}">Edit</button>
             ${m.status!=='issued'?`<button class="btn sm" data-issue="${m.id}">Issue</button>`:''}
             <button class="btn ghost sm" data-print="${m.id}">Download</button>
             ${isAdmin()?`<button class="btn danger sm" data-del-mro="${m.id}" title="Delete MRO">Delete</button>`:''}
@@ -1028,11 +1033,16 @@ function viewMRO(){
   $("view").querySelectorAll("[data-issue]").forEach(b=>b.addEventListener("click",()=>issueMRO(b.dataset.issue)));
   $("view").querySelectorAll("[data-print]").forEach(b=>b.addEventListener("click",()=>printDoc(docHTML_MRO(DB.mros.find(x=>x.id===b.dataset.print)))));
   $("view").querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>previewDoc(docHTML_MRO(DB.mros.find(x=>x.id===b.dataset.view)))));
-  $("view").querySelectorAll("[data-edit-mro]").forEach(b=>b.addEventListener("click",()=>{
-    const m=DB.mros.find(x=>x.id===b.dataset.editMro); if(!m||m.status==="issued")return;
-    draft={kind:"mro",id:m.id,no:m.no,date:m.date,requestedBy:m.requestedBy,project:m.project,
-      purpose:m.purpose||"",note:m.note,lines:m.lines.map(l=>({...l})),
-      preparedBy:m.preparedBy,approvedBy:m.approvedBy,approverTitle:m.approverTitle,sig:m.sig};
+  $("view").querySelectorAll("[data-edit-mro]").forEach(b=>b.addEventListener("click",async()=>{
+    const m=DB.mros.find(x=>x.id===b.dataset.editMro); if(!m)return;
+    if(m.status==="issued"){
+      if(!confirm(`${m.no} has already been issued and its stock deducted. Editing it will restore that stock, and you'll need to issue it again after making your changes. Continue?`))return;
+      const ok=await unissueDocDB(m.id); if(!ok)return;
+    }
+    const fresh=DB.mros.find(x=>x.id===b.dataset.editMro); if(!fresh)return;
+    draft={kind:"mro",id:fresh.id,no:fresh.no,date:fresh.date,requestedBy:fresh.requestedBy,project:fresh.project,
+      purpose:fresh.purpose||"",note:fresh.note,lines:fresh.lines.map(l=>({...l})),
+      preparedBy:fresh.preparedBy,approvedBy:fresh.approvedBy,approverTitle:fresh.approverTitle,sig:fresh.sig};
     viewMRO();
   }));
   $("view").querySelectorAll("[data-del-mro]").forEach(b=>b.addEventListener("click",async()=>{
