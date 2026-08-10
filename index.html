@@ -1393,7 +1393,7 @@ function reportHTML(){
       <td class="c">${esc(r.it.category||"—")}</td><td class="c">${esc(r.it.unit||"")}</td>
       <td>${n2(r.opening)}</td><td>${n2(r.rin)}</td><td>${n2(r.rout)}</td><td><b>${n2(r.closing)}</b></td>
       <td>${ngn.format(r.it.cost||0)}</td><td>${ngn.format(r.closing*(r.it.cost||0))}</td></tr>`).join("");
-  const txRows=tx.slice().reverse().map((t,i)=>{const it=itemById(t.itemId);
+  const txRows=tx.map((t,i)=>{const it=itemById(t.itemId);
     return `<tr><td class="c">${i+1}</td><td class="c">${fmtDate(t.date)}</td><td class="l">${esc(it?it.name:"(removed)")}</td>
       <td class="c">${t.type==="IN"?"Receipt":"Issue"}</td><td>${n2(t.qty)}</td><td class="l">${esc(t.ref)}</td><td class="l">${esc(t.party||"—")}</td></tr>`;}).join("");
   return `<div class="docwrap">
