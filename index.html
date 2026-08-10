@@ -905,18 +905,55 @@ function wireSig(){
 }
 
 /* ============ PURCHASE ORDERS ============ */
+let poFilter="",poSort="";
+const PO_SORTS=[
+  ["","Newest first"],
+  ["date_desc","Date (newest)"],
+  ["date_asc","Date (oldest)"],
+  ["supplier_asc","Supplier (A–Z)"],
+  ["supplier_desc","Supplier (Z–A)"],
+  ["no_asc","PO No. (A–Z)"],
+  ["no_desc","PO No. (Z–A)"],
+  ["value_desc","Value (highest)"],
+  ["value_asc","Value (lowest)"],
+  ["status","Status (Draft first)"]
+];
+function poValue(p){return p.lines.reduce((s,l)=>s+(l.qty||0)*(l.cost||0),0);}
+function sortPos(list){
+  const arr=list.slice();
+  const cmp=(x,y)=>x.localeCompare(y,undefined,{numeric:true,sensitivity:"base"});
+  switch(poSort){
+    case "date_desc": arr.sort((a,b)=>cmp(b.date||"",a.date||"")); break;
+    case "date_asc": arr.sort((a,b)=>cmp(a.date||"",b.date||"")); break;
+    case "supplier_asc": arr.sort((a,b)=>cmp(a.supplier||"",b.supplier||"")); break;
+    case "supplier_desc": arr.sort((a,b)=>cmp(b.supplier||"",a.supplier||"")); break;
+    case "no_asc": arr.sort((a,b)=>cmp(a.no||"",b.no||"")); break;
+    case "no_desc": arr.sort((a,b)=>cmp(b.no||"",a.no||"")); break;
+    case "value_desc": arr.sort((a,b)=>poValue(b)-poValue(a)); break;
+    case "value_asc": arr.sort((a,b)=>poValue(a)-poValue(b)); break;
+    case "status": arr.sort((a,b)=>cmp(a.status||"",b.status||"")); break;
+    default: arr.reverse();
+  }
+  return arr;
+}
 function viewPO(){
   if(draft&&draft.kind==="po"){return poForm();}
+  const q=poFilter.trim().toLowerCase();
+  const list=sortPos(DB.pos.filter(p=>!q||[p.no,p.supplier].filter(Boolean).join(" ").toLowerCase().includes(q)));
   $("view").innerHTML=`
     <div class="card pad">
       <div class="btnrow" style="justify-content:space-between;margin-bottom:14px">
         <div><h3>Purchase Orders</h3><div class="sub" style="margin:0">Receiving a purchase order adds its items to stock.</div></div>
         <button class="btn" id="newPO">+ Create purchase order</button>
       </div>
-      ${DB.pos.length?`<table class="grid"><thead><tr><th class="l">PO No.</th><th class="l">Supplier</th><th class="l">Date</th><th>Lines</th><th>Value</th><th class="c">Receipt</th><th class="c">Status</th><th class="c">Actions</th></tr></thead><tbody>
-        ${DB.pos.slice().reverse().map(p=>`<tr>
+      <div class="searchbar" style="margin-bottom:14px">
+        <input id="p_search" placeholder="Search PO no. or supplier" value="${esc(poFilter)}">
+        <select id="p_sort">${PO_SORTS.map(([v,l])=>`<option value="${v}" ${poSort===v?'selected':''}>${l}</option>`).join("")}</select>
+      </div>
+      ${list.length?`<table class="grid"><thead><tr><th class="l">PO No.</th><th class="l">Supplier</th><th class="l">Date</th><th>Lines</th><th>Value</th><th class="c">Receipt</th><th class="c">Status</th><th class="c">Actions</th></tr></thead><tbody>
+        ${list.map(p=>`<tr>
           <td class="l">${esc(p.no)}</td><td class="l" style="font-weight:500">${esc(p.supplier||"—")}</td><td class="l" style="font-weight:500">${fmtDate(p.date)}</td>
-          <td>${p.lines.length}</td><td>${ngn.format(p.lines.reduce((s,l)=>s+(l.qty||0)*(l.cost||0),0))}</td>
+          <td>${p.lines.length}</td><td>${ngn.format(poValue(p))}</td>
           <td class="c">
             ${p.paymentReceipt
               ? `<a href="${p.paymentReceipt}" target="_blank" title="View receipt"><img src="${p.paymentReceipt}" style="max-height:36px;max-width:60px;border-radius:4px;border:1px solid var(--line);cursor:pointer"></a>`
@@ -929,8 +966,10 @@ function viewPO(){
             <button class="btn ghost sm" data-print="${p.id}">Download</button>
             ${isAdmin()?`<button class="btn danger sm" data-del-po="${p.id}" title="Delete PO">Delete</button>`:''}
           </div></td></tr>`).join("")}
-      </tbody></table>`:'<div class="empty">No purchase orders yet.</div>'}
+      </tbody></table>`:`<div class="empty">${q?"No purchase orders match your search.":"No purchase orders yet."}</div>`}
     </div>`;
+  $("p_search").addEventListener("input",e=>{poFilter=e.target.value;const p=e.target.selectionStart;viewPO();const s=$("p_search");s.focus();s.setSelectionRange(p,p);});
+  $("p_sort").addEventListener("change",e=>{poSort=e.target.value;viewPO();});
   $("newPO").addEventListener("click",()=>{
     if(!DB.items.length){toast("Add stock items first");return;}
     draft={kind:"po",id:uid(),no:"",date:today(),supplier:"",note:"",lines:[{itemId:"",qty:1,cost:0}],preparedBy:"",approvedBy:"",approverTitle:"",sig:null};
