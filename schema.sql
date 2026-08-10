@@ -378,22 +378,23 @@ begin
   if d is null then raise exception 'Document not found'; end if;
   if d.status <> 'draft' then raise exception 'Document already applied'; end if;
   for ln in select * from jsonb_array_elements(d.lines) loop
-    if d.kind = 'po' then
+    if (ln ? 'packageId') and (ln->>'packageId') is not null then
+      select * into pkg from public.bos_packages where id = (ln->>'packageId')::uuid;
+      if pkg is not null then
+        for comp in select * from jsonb_array_elements(pkg.components) loop
+          update public.items
+             set qty = coalesce(qty,0) + (case when d.kind = 'po' then 1 else -1 end)
+                       * coalesce((comp->>'qty')::numeric,0) * coalesce((ln->>'qty')::numeric,0),
+                 updated_at = now()
+           where id = (comp->>'itemId')::uuid;
+        end loop;
+      end if;
+    elsif d.kind = 'po' then
       update public.items
          set qty = coalesce(qty,0) + coalesce((ln->>'qty')::numeric,0),
              cost = case when coalesce((ln->>'cost')::numeric,0) > 0 then (ln->>'cost')::numeric else cost end,
              updated_at = now()
        where id = (ln->>'itemId')::uuid;
-    elsif (ln ? 'packageId') and (ln->>'packageId') is not null then
-      select * into pkg from public.bos_packages where id = (ln->>'packageId')::uuid;
-      if pkg is not null then
-        for comp in select * from jsonb_array_elements(pkg.components) loop
-          update public.items
-             set qty = coalesce(qty,0) - coalesce((comp->>'qty')::numeric,0) * coalesce((ln->>'qty')::numeric,0),
-                 updated_at = now()
-           where id = (comp->>'itemId')::uuid;
-        end loop;
-      end if;
     else
       update public.items
          set qty = coalesce(qty,0) - coalesce((ln->>'qty')::numeric,0),
@@ -415,21 +416,22 @@ begin
   if d is null then raise exception 'Document not found'; end if;
   if d.status = 'draft' then raise exception 'Document is already a draft'; end if;
   for ln in select * from jsonb_array_elements(d.lines) loop
-    if d.kind = 'po' then
-      update public.items
-         set qty = coalesce(qty,0) - coalesce((ln->>'qty')::numeric,0),
-             updated_at = now()
-       where id = (ln->>'itemId')::uuid;
-    elsif (ln ? 'packageId') and (ln->>'packageId') is not null then
+    if (ln ? 'packageId') and (ln->>'packageId') is not null then
       select * into pkg from public.bos_packages where id = (ln->>'packageId')::uuid;
       if pkg is not null then
         for comp in select * from jsonb_array_elements(pkg.components) loop
           update public.items
-             set qty = coalesce(qty,0) + coalesce((comp->>'qty')::numeric,0) * coalesce((ln->>'qty')::numeric,0),
+             set qty = coalesce(qty,0) + (case when d.kind = 'po' then -1 else 1 end)
+                       * coalesce((comp->>'qty')::numeric,0) * coalesce((ln->>'qty')::numeric,0),
                  updated_at = now()
            where id = (comp->>'itemId')::uuid;
         end loop;
       end if;
+    elsif d.kind = 'po' then
+      update public.items
+         set qty = coalesce(qty,0) - coalesce((ln->>'qty')::numeric,0),
+             updated_at = now()
+       where id = (ln->>'itemId')::uuid;
     else
       update public.items
          set qty = coalesce(qty,0) + coalesce((ln->>'qty')::numeric,0),
@@ -466,22 +468,23 @@ begin
   if d is null then raise exception 'Document not found'; end if;
   if d.status <> 'draft' then raise exception 'Document already applied'; end if;
   for ln in select * from jsonb_array_elements(d.lines) loop
-    if d.kind = 'po' then
+    if (ln ? 'packageId') and (ln->>'packageId') is not null then
+      select * into pkg from public.lif_bos_packages where id = (ln->>'packageId')::uuid;
+      if pkg is not null then
+        for comp in select * from jsonb_array_elements(pkg.components) loop
+          update public.lif_items
+             set qty = coalesce(qty,0) + (case when d.kind = 'po' then 1 else -1 end)
+                       * coalesce((comp->>'qty')::numeric,0) * coalesce((ln->>'qty')::numeric,0),
+                 updated_at = now()
+           where id = (comp->>'itemId')::uuid;
+        end loop;
+      end if;
+    elsif d.kind = 'po' then
       update public.lif_items
          set qty = coalesce(qty,0) + coalesce((ln->>'qty')::numeric,0),
              cost = case when coalesce((ln->>'cost')::numeric,0) > 0 then (ln->>'cost')::numeric else cost end,
              updated_at = now()
        where id = (ln->>'itemId')::uuid;
-    elsif (ln ? 'packageId') and (ln->>'packageId') is not null then
-      select * into pkg from public.lif_bos_packages where id = (ln->>'packageId')::uuid;
-      if pkg is not null then
-        for comp in select * from jsonb_array_elements(pkg.components) loop
-          update public.lif_items
-             set qty = coalesce(qty,0) - coalesce((comp->>'qty')::numeric,0) * coalesce((ln->>'qty')::numeric,0),
-                 updated_at = now()
-           where id = (comp->>'itemId')::uuid;
-        end loop;
-      end if;
     else
       update public.lif_items
          set qty = coalesce(qty,0) - coalesce((ln->>'qty')::numeric,0),
@@ -503,21 +506,22 @@ begin
   if d is null then raise exception 'Document not found'; end if;
   if d.status = 'draft' then raise exception 'Document is already a draft'; end if;
   for ln in select * from jsonb_array_elements(d.lines) loop
-    if d.kind = 'po' then
-      update public.lif_items
-         set qty = coalesce(qty,0) - coalesce((ln->>'qty')::numeric,0),
-             updated_at = now()
-       where id = (ln->>'itemId')::uuid;
-    elsif (ln ? 'packageId') and (ln->>'packageId') is not null then
+    if (ln ? 'packageId') and (ln->>'packageId') is not null then
       select * into pkg from public.lif_bos_packages where id = (ln->>'packageId')::uuid;
       if pkg is not null then
         for comp in select * from jsonb_array_elements(pkg.components) loop
           update public.lif_items
-             set qty = coalesce(qty,0) + coalesce((comp->>'qty')::numeric,0) * coalesce((ln->>'qty')::numeric,0),
+             set qty = coalesce(qty,0) + (case when d.kind = 'po' then -1 else 1 end)
+                       * coalesce((comp->>'qty')::numeric,0) * coalesce((ln->>'qty')::numeric,0),
                  updated_at = now()
            where id = (comp->>'itemId')::uuid;
         end loop;
       end if;
+    elsif d.kind = 'po' then
+      update public.lif_items
+         set qty = coalesce(qty,0) - coalesce((ln->>'qty')::numeric,0),
+             updated_at = now()
+       where id = (ln->>'itemId')::uuid;
     else
       update public.lif_items
          set qty = coalesce(qty,0) + coalesce((ln->>'qty')::numeric,0),

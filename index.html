@@ -856,7 +856,7 @@ function renderLines(kind){
       const fulfillable=pkg?packageFulfillable(pkg):0;
       r.innerHTML=`<div style="font-size:.82rem;font-weight:700;padding:8px 0">🧩 ${esc(pkg?pkg.name:"(package removed)")}<div style="font-size:.66rem;color:var(--muted);font-weight:500">BOS package · ${pkg?(pkg.components||[]).length:0} components</div></div>
         <input class="num" type="number" data-i="${idx}" data-f="qty" value="${l.qty}">
-        ${showCost?`<div style="font-size:.78rem;font-weight:700;text-align:center;color:var(--muted)">—</div>`
+        ${showCost?`<div style="font-size:.78rem;font-weight:700;text-align:right;color:var(--muted)" title="Live package cost — receiving a package doesn't override each component's registered cost">${unitCost}</div>`
                   :`<div style="font-size:.78rem;font-weight:700;text-align:center;color:${fulfillable<(l.qty||0)?'var(--red)':'var(--muted)'}">${fulfillable} pkgs</div>
                     <div style="font-size:.78rem;font-weight:700;text-align:right;color:var(--muted)">${unitCost}</div>`}
         <button class="delbtn" data-del="${idx}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>`;
@@ -883,7 +883,10 @@ function renderLines(kind){
   c.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{draft.lines.splice(+b.dataset.del,1);renderLines(kind);updateDocTotal(kind);}));
   updateDocTotal(kind);
 }
-function docTotal(){return draft.lines.reduce((s,l)=>s+(l.qty||0)*(l.cost||0),0);}
+function docTotal(){return draft.lines.reduce((s,l)=>{
+  if(l.packageId){ const pkg=pkgById(l.packageId); return s+(l.qty||0)*(pkg?packageCost(pkg):0); }
+  return s+(l.qty||0)*(l.cost||0);
+},0);}
 function docTotalFromStock(){return draft.lines.reduce((s,l)=>{
   if(l.packageId){ const pkg=pkgById(l.packageId); return s+(l.qty||0)*(pkg?packageCost(pkg):0); }
   const it=itemById(l.itemId); return s+(l.qty||0)*(it?it.cost||0:0);
@@ -919,7 +922,10 @@ const PO_SORTS=[
   ["value_asc","Value (lowest)"],
   ["status","Status (Draft first)"]
 ];
-function poValue(p){return p.lines.reduce((s,l)=>s+(l.qty||0)*(l.cost||0),0);}
+function poValue(p){return p.lines.reduce((s,l)=>{
+  if(l.packageId){ const pkg=pkgById(l.packageId); return s+(l.qty||0)*(pkg?packageCost(pkg):0); }
+  return s+(l.qty||0)*(l.cost||0);
+},0);}
 function sortPos(list){
   const arr=list.slice();
   const cmp=(x,y)=>x.localeCompare(y,undefined,{numeric:true,sensitivity:"base"});
@@ -1009,6 +1015,10 @@ function poForm(){
       </div>
       <div class="card pad">
         <h3>Items to order</h3><div class="sub">Total: <b id="docTotal">${ngn.format(0)}</b></div>
+        ${DB.bosPackages.length?`<div class="mb" style="display:flex;gap:8px;align-items:flex-end">
+          <div style="flex:1"><span class="lab">Add from BOS package</span><select id="pkgPick"><option value="">— select package —</option>${DB.bosPackages.map(p=>`<option value="${p.id}">${esc(p.name)} · ${ngn.format(packageCost(p))}</option>`).join("")}</select></div>
+          <button class="btn ghost sm" id="pkgAdd" style="height:36px">+ Add</button>
+        </div>`:''}
         ${lineEditor("po")}
       </div>
     </div>`;
@@ -1017,9 +1027,20 @@ function poForm(){
   $("d_sup").addEventListener("input",e=>draft.supplier=e.target.value);
   $("d_note").addEventListener("input",e=>draft.note=e.target.value);
   $("addLine").addEventListener("click",()=>{draft.lines.push({itemId:"",qty:1,cost:0});renderLines("po");});
+  if($("pkgAdd")) $("pkgAdd").addEventListener("click",()=>{
+    const pid=$("pkgPick").value; if(!pid)return;
+    const pkg=DB.bosPackages.find(p=>p.id===pid); if(!pkg)return;
+    draft.lines=draft.lines.filter(l=>l.itemId||l.packageId);
+    const existing=draft.lines.find(l=>l.packageId===pid);
+    if(existing) existing.qty=(existing.qty||0)+1;
+    else draft.lines.push({packageId:pid, qty:1, cost:0});
+    renderLines("po");
+    toast(`${pkg.name} added as one package line`);
+    $("pkgPick").value="";
+  });
   $("d_cancel").addEventListener("click",()=>{draft=null;viewPO();});
   $("d_save").addEventListener("click",async()=>{
-    const lines=draft.lines.filter(l=>l.itemId&&(l.qty||0)>0);
+    const lines=draft.lines.filter(l=>(l.itemId||l.packageId)&&(l.qty||0)>0);
     if(!lines.length){toast("Add at least one item line");return;}
     if(!draft.supplier.trim()){toast("Enter the supplier");return;}
     if(!draft.approvedBy.trim()){toast("Approver name is required");return;}
@@ -1227,10 +1248,30 @@ function signBlock(d,roleLabel){
 }
 function docHTML_PO(p){
   if(!p)return "";
-  const total=p.lines.reduce((s,l)=>s+(l.qty||0)*(l.cost||0),0);
-  const rows=p.lines.map((l,i)=>{const it=itemById(l.itemId);const amt=(l.qty||0)*(l.cost||0);
-    return `<tr><td class="c">${i+1}</td><td class="l">${esc(it?it.name:"(item removed)")}${it&&it.sku?`<div style="font-size:9.5px;color:#8392a5;font-weight:500">${esc(it.sku)}</div>`:""}</td>
-      <td class="c">${esc(it?it.unit:"")}</td><td>${n2(l.qty)}</td><td>${ngn.format(l.cost||0)}</td><td>${ngn.format(amt)}</td></tr>`;}).join("");
+  const total=poValue(p);
+  let sn=0;
+  const rows=p.lines.map(l=>{
+    sn++;
+    if(l.packageId){
+      const pkg=pkgById(l.packageId);
+      const unitCost=pkg?packageCost(pkg):0;
+      const header=`<tr><td class="c">${sn}</td><td class="l"><b>🧩 ${esc(pkg?pkg.name:"(package removed)")}</b><div style="font-size:9.5px;color:#8392a5;font-weight:500">BOS package</div></td>
+        <td class="c">Package</td><td>${n2(l.qty)}</td><td>${ngn.format(unitCost)}</td><td>${ngn.format((l.qty||0)*unitCost)}</td></tr>`;
+      const subRows=pkg?(pkg.components||[]).map(c=>{
+        const it=itemById(c.itemId);
+        const cQty=(c.qty||0)*(l.qty||0);
+        return `<tr><td class="c"></td><td class="l" style="padding-left:22px;font-size:11px;color:#8392a5">↳ ${esc(it?it.name:"(item removed)")}</td>
+          <td class="c" style="font-size:11px;color:#8392a5">${esc(it?it.unit:"")}</td>
+          <td style="font-size:11px;color:#8392a5">${n2(cQty)}</td>
+          <td style="font-size:11px;color:#8392a5">${ngn.format(it?it.cost||0:0)}</td>
+          <td style="font-size:11px;color:#8392a5">${ngn.format(cQty*(it?it.cost||0:0))}</td></tr>`;
+      }).join(""):"";
+      return header+subRows;
+    }
+    const it=itemById(l.itemId);const amt=(l.qty||0)*(l.cost||0);
+    return `<tr><td class="c">${sn}</td><td class="l">${esc(it?it.name:"(item removed)")}${it&&it.sku?`<div style="font-size:9.5px;color:#8392a5;font-weight:500">${esc(it.sku)}</div>`:""}</td>
+      <td class="c">${esc(it?it.unit:"")}</td><td>${n2(l.qty)}</td><td>${ngn.format(l.cost||0)}</td><td>${ngn.format(amt)}</td></tr>`;
+  }).join("");
   return `<div class="docwrap">
     ${docHead("PURCHASE ORDER",`<b>PO No:</b> ${esc(p.no)}<br><b>Date:</b> ${fmtDate(p.date)}${p.receivedDate?`<br><b>Received:</b> ${fmtDate(p.receivedDate)}`:""}<br><b>Status:</b> ${p.status==="received"?"Received into stock":"Awaiting delivery"}`)}
     <div class="doc-parties">
