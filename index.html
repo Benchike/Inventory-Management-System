@@ -113,8 +113,9 @@
   table.doc{width:100%;border-collapse:collapse;margin-top:18px;table-layout:fixed}
   table.doc th{background:#021431;color:#fff;font-size:9px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;padding:8px 9px;text-align:right}
   table.doc th.l{text-align:left}table.doc th.c{text-align:center}
-  table.doc td{padding:8px 9px;border-bottom:1px solid #eaeef4;font-size:11.5px;text-align:right;font-variant-numeric:tabular-nums;word-break:break-word;vertical-align:top}
-  table.doc td.l{text-align:left;font-weight:600}table.doc td.c{text-align:center;color:#56657a}
+  table.doc td{padding:8px 9px;border-bottom:1px solid #eaeef4;font-size:11.5px;text-align:right;font-variant-numeric:tabular-nums;vertical-align:top}
+  table.doc td.l{text-align:left;font-weight:600;word-break:break-word}
+  table.doc td.c{text-align:center;color:#56657a}
   table.doc tr.tot td{background:#021431;color:#fff;font-weight:800;font-size:12px;border:none}
   .doc-sign{display:flex;justify-content:space-between;gap:30px;margin-top:26px;padding-top:18px;border-top:1px solid #eaeef4}
   .doc-note{flex:1;font-size:11px;color:#41526a;line-height:1.5;white-space:pre-line}
@@ -624,17 +625,17 @@ function viewDashboard(){
 }
 function allTx(){
   const out=[];
-  DB.pos.filter(p=>p.status==="received").forEach(p=>p.lines.forEach(l=>out.push({date:p.receivedDate||p.date,type:"IN",itemId:l.itemId,qty:l.qty,cost:l.cost,ref:p.no,party:p.supplier})));
+  DB.pos.filter(p=>p.status==="received").forEach(p=>p.lines.forEach(l=>out.push({date:p.date||p.receivedDate,type:"IN",itemId:l.itemId,qty:l.qty,cost:l.cost,ref:p.no,party:p.supplier})));
   DB.mros.filter(m=>m.status==="issued").forEach(m=>m.lines.forEach(l=>{
     if(l.packageId){
       const pkg=pkgById(l.packageId);
       (pkg?pkg.components:[]).forEach(c=>{
         const it=itemById(c.itemId);
-        out.push({date:m.issuedDate||m.date,type:"OUT",itemId:c.itemId,qty:(c.qty||0)*(l.qty||0),cost:it?it.cost:0,ref:m.no,party:m.project||m.requestedBy});
+        out.push({date:m.date||m.issuedDate,type:"OUT",itemId:c.itemId,qty:(c.qty||0)*(l.qty||0),cost:it?it.cost:0,ref:m.no,party:m.project||m.requestedBy});
       });
     } else {
       const it=itemById(l.itemId);
-      out.push({date:m.issuedDate||m.date,type:"OUT",itemId:l.itemId,qty:l.qty,cost:it?it.cost:0,ref:m.no,party:m.project||m.requestedBy});
+      out.push({date:m.date||m.issuedDate,type:"OUT",itemId:l.itemId,qty:l.qty,cost:it?it.cost:0,ref:m.no,party:m.project||m.requestedBy});
     }
   }));
   return out.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
@@ -1336,12 +1337,12 @@ function reportHTML(){
       <div class="c dk"><div class="l">Closing stock value</div><div class="v">${ngn.format(closeVal)}</div></div>
     </div>
     <div class="rep-h">Stock Movement Summary</div>
-    <table class="doc"><colgroup><col style="width:26px"><col><col style="width:96px"><col style="width:44px"><col style="width:56px"><col style="width:52px"><col style="width:52px"><col style="width:56px"><col style="width:78px"><col style="width:88px"></colgroup>
+    <table class="doc"><colgroup><col style="width:34px"><col><col style="width:92px"><col style="width:44px"><col style="width:56px"><col style="width:52px"><col style="width:52px"><col style="width:56px"><col style="width:78px"><col style="width:88px"></colgroup>
       <thead><tr><th class="c">S/N</th><th class="l">Item</th><th class="c">Category</th><th class="c">Unit</th><th>Opening</th><th>Received</th><th>Issued</th><th>Closing</th><th>Unit Cost</th><th>Closing Value</th></tr></thead>
       <tbody>${body||'<tr><td colspan="10" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No items in catalogue</td></tr>'}
         <tr class="tot"><td></td><td class="l" style="color:#fff">TOTAL</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>${ngn.format(closeVal)}</td></tr></tbody></table>
     <div class="rep-h">Movement Log</div>
-    <table class="doc"><colgroup><col style="width:26px"><col style="width:76px"><col><col style="width:60px"><col style="width:52px"><col style="width:118px"><col style="width:130px"></colgroup>
+    <table class="doc"><colgroup><col style="width:34px"><col style="width:72px"><col><col style="width:60px"><col style="width:52px"><col style="width:118px"><col style="width:130px"></colgroup>
       <thead><tr><th class="c">S/N</th><th class="c">Date</th><th class="l">Item</th><th class="c">Type</th><th>Qty</th><th class="l">Reference</th><th class="l">Supplier / Project</th></tr></thead>
       <tbody>${txRows||'<tr><td colspan="7" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No stock movements in this period</td></tr>'}</tbody></table>
     ${docFoot()}</div>`;
