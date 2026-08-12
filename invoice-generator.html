@@ -550,6 +550,7 @@ function renderHistTable(rows){
       <td><span class="statuspill ${r.status}" style="padding:3px 9px;font-size:.6rem">${esc(r.status)}</span></td>
       <td><div class="rowactions">
         <button class="abtn" data-act="open" data-id="${r.id}">Open</button>
+        <button class="abtn" data-act="regen" data-id="${r.id}">Regenerate</button>
         <button class="abtn" data-act="pdf" data-id="${r.id}">PDF</button>
         <button class="abtn" data-act="png" data-id="${r.id}">PNG</button>
         ${isAdmin()?`<button class="abtn danger" data-act="delete" data-id="${r.id}" data-no="${esc(r.inv_no)}">Delete</button>`:''}
@@ -558,10 +559,24 @@ function renderHistTable(rows){
   tb.querySelectorAll(".abtn").forEach(b=>b.addEventListener("click",async()=>{
     const id=b.dataset.id, act=b.dataset.act;
     if(act==="open"){ if(await switchToInvoice(id)) setView("editor"); }
+    else if(act==="regen"){ await regenerateInvoice(id); }
     else if(act==="pdf"){ if(await switchToInvoice(id)) await downloadPdf(); }
     else if(act==="png"){ if(await switchToInvoice(id)) await downloadPng(); }
     else if(act==="delete"){ await deleteInvoice(id, b.dataset.no); }
   }));
+}
+async function regenerateInvoice(id){
+  if(!synced) return;
+  if(curStatus==="new" && !confirm("Discard this unsaved new invoice and generate a new one from the selected invoice?")) return;
+  const {data,error}=await SB.from("invoices").select("*").eq("id",id).single();
+  if(error){ console.error("regenerate error",error); alert("Could not load invoice: "+error.message); return; }
+  const inv=rowToInvoice(data);
+  inv._id=null; inv.status="new";
+  inv.invNo = await genNoRemote();
+  inv.invDate = new Date().toISOString().slice(0,10);
+  inv.dueDate = "";
+  loadInvoiceIntoForm(inv);
+  setView("editor");
 }
 async function deleteInvoice(id, invNoLabel){
   if(!isAdmin()) return;
