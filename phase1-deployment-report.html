@@ -109,6 +109,19 @@
   .upbtn:hover{border-color:var(--blue)}
   .upthumb{display:none;margin-top:8px;max-height:56px;background:#fff;border:1px solid var(--line);border-radius:7px;padding:4px}
   .upthumb.show{display:block}
+
+  .asbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+  .asswitch{position:relative;display:inline-block;width:38px;height:22px;flex:none;cursor:pointer}
+  .asswitch input{opacity:0;width:0;height:0;position:absolute}
+  .asdot{position:absolute;inset:0;background:var(--line);border-radius:999px;transition:.15s}
+  .asdot::before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s}
+  .asswitch input:checked+.asdot{background:var(--blue)}
+  .asswitch input:checked+.asdot::before{transform:translateX(16px)}
+  .asinfo{display:flex;flex-direction:column;flex:1;min-width:0}
+  .aslabel{font-size:.74rem;font-weight:700;color:var(--text)}
+  .asstatus{font-size:.66rem;font-weight:600;color:var(--muted)}
+  .assavebtn{font-family:inherit;font-size:.72rem;font-weight:700;color:var(--blue-deep);background:var(--card-bg);border:1px solid var(--line);border-radius:8px;padding:7px 11px;cursor:pointer;flex:none}
+  .assavebtn:hover{border-color:var(--blue)}
   .signone img{display:block;max-height:56px;max-width:230px;margin-bottom:2px}
   .rp-foot{border-top:1px solid #eaeef4;padding:13px 34px 22px;text-align:center;font-size:10px;color:#8392a5}
 
@@ -150,6 +163,11 @@
       <div class="sec">
         <h2>Report header</h2>
         <div id="syncBanner" style="display:none;font-size:.72rem;font-weight:600;padding:8px 10px;border-radius:8px;border:1px solid var(--line);margin-bottom:10px;line-height:1.4"></div>
+        <div class="asbar">
+          <label class="asswitch"><input type="checkbox" id="asToggle" checked><span class="asdot"></span></label>
+          <div class="asinfo"><span class="aslabel">Autosave</span><span class="asstatus" id="saveStatus">All changes saved</span></div>
+          <button class="assavebtn" id="saveNow" type="button">Save now</button>
+        </div>
         <div class="mb"><span class="lab">Deliverable title</span><input id="title" value="Phase 1 Deployment Report"></div>
         <div class="row2 mb"><div><span class="lab">Reporting period</span><input id="period" value="Q1 · April – June 2026"></div><div><span class="lab">Report date</span><input type="date" id="repDate"></div></div>
         <div class="row2 mb"><div><span class="lab">Programme</span><input id="prog" value="ZE-Gen LIF"></div><div><span class="lab">Deliverable ref</span><input id="delRef" value="DEL_Pawabiz_"></div></div>
@@ -230,7 +248,17 @@ let cur=0;
 let signImg=null;
 
 /* ============ SUPABASE DATA LAYER ============ */
+const REPORT_KEY="phase1";
+const META_FIELDS=["title","period","repDate","prog","delRef","project","subTo","signName","signTitle","execSum","decl"];
+let autosaveOn = localStorage.getItem("kiru_autosave_"+REPORT_KEY) !== "off";
+let siteDirty=new Set(), metaDirty=false, metaSaveTimer=null;
 let SB=null, synced=false, saveTimers={};
+function setSaveStatus(state){
+  const el=$("saveStatus"); if(!el) return;
+  if(state==="saving"){ el.textContent="Saving…"; el.style.color="var(--muted)"; }
+  else if(state==="dirty"){ el.textContent="Unsaved changes"; el.style.color="#b06a12"; }
+  else { el.textContent="All changes saved"; el.style.color="var(--green)"; }
+}
 function cfgOK(){const c=window.KIRU_CONFIG||{};return c.SUPABASE_URL&&c.SUPABASE_ANON_KEY&&!/YOUR-/.test(c.SUPABASE_URL+c.SUPABASE_ANON_KEY);}
 function setSyncBanner(msg,ok){
   const b=$("syncBanner"); if(!b)return;
@@ -268,8 +296,10 @@ async function saveSite(i){
 }
 function queueSave(i){
   if(!SB||!synced) return;
+  if(!autosaveOn){ siteDirty.add(i); setSaveStatus("dirty"); return; }
+  setSaveStatus("saving");
   clearTimeout(saveTimers[i]);
-  saveTimers[i]=setTimeout(()=>saveSite(i),650);
+  saveTimers[i]=setTimeout(async()=>{ await saveSite(i); setSaveStatus("saved"); },650);
 }
 async function deleteSiteRow(id){
   if(!SB||!synced||!id) return;
@@ -279,6 +309,41 @@ async function deleteSiteRow(id){
 async function resequenceAll(){
   if(!SB||!synced) return;
   await Promise.all(sites.map((s,i)=> s._id ? SB.from("lif_phase1_installations").update({sort_order:i}).eq("id",s._id) : Promise.resolve()));
+}
+function metaToObj(){
+  const o={}; META_FIELDS.forEach(id=>o[id]=val(id)); o.signImg=signImg||""; return o;
+}
+function applyMetaObj(o){
+  if(!o) return;
+  META_FIELDS.forEach(id=>{ if(o[id]!==undefined && $(id)) $(id).value=o[id]; });
+  if(o.signImg){ signImg=o.signImg; const th=$("signThumb"); th.src=signImg; th.classList.add("show"); }
+}
+async function loadMeta(){
+  if(!SB||!synced) return;
+  const {data,error}=await SB.from("lif_report_meta").select("data").eq("report_key",REPORT_KEY).maybeSingle();
+  if(error){ console.error("meta load error",error); return; }
+  if(data&&data.data) applyMetaObj(data.data);
+}
+async function saveMetaNow(){
+  if(!SB||!synced) return;
+  const {error}=await SB.from("lif_report_meta").upsert({report_key:REPORT_KEY,data:metaToObj(),updated_at:new Date().toISOString()},{onConflict:"report_key"});
+  if(error){ console.error("meta save error",error); return; }
+  metaDirty=false;
+}
+function queueMetaSave(){
+  if(!SB||!synced) return;
+  if(!autosaveOn){ metaDirty=true; setSaveStatus("dirty"); return; }
+  setSaveStatus("saving");
+  clearTimeout(metaSaveTimer);
+  metaSaveTimer=setTimeout(async()=>{ await saveMetaNow(); setSaveStatus("saved"); },650);
+}
+async function saveAllNow(){
+  if(!SB||!synced){ alert("Sign in from the main Kiru app to save."); return; }
+  setSaveStatus("saving");
+  await Promise.all(sites.map((s,i)=>saveSite(i)));
+  await saveMetaNow();
+  siteDirty.clear(); metaDirty=false;
+  setSaveStatus("saved");
 }
 const SEED_SITES = [{"_id":null,"ref":"KIRU-P1-001","business":"Global New Life","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":2,"pvW":600,"invKW":0,"batKWh":0,"commDate":"2026-04-01","status":"Commissioned","beneficiaries":2,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-002","business":"Coco Extension","category":"SME","cluster":"Owerri, Imo State","cls":"SGS","pvQty":1,"pvW":590,"invKW":0.5,"batKWh":1,"commDate":"2026-04-02","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-003","business":"Henry Ezeobi","category":"Residential","cluster":"Enugu","cls":"SGS","pvQty":6,"pvW":610,"invKW":6,"batKWh":5,"commDate":"2026-04-04","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-004","business":"Spine Product LTD","category":"SME","cluster":"Idumota, Lagos","cls":"GBS","pvQty":0,"pvW":0,"invKW":0.5,"batKWh":1,"commDate":"2026-04-07","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-005","business":"Benvic Pharmacy","category":"SME","cluster":"Idumota, Lagos","cls":"GBS","pvQty":0,"pvW":0,"invKW":0.5,"batKWh":1,"commDate":"2026-04-07","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-006","business":"Sir Ken Pharmacy","category":"SME","cluster":"Idumota, Lagos","cls":"GBS","pvQty":1,"pvW":610,"invKW":0.5,"batKWh":1,"commDate":"2026-04-09","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-007","business":"God of Elijah Enterprise","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":1,"pvW":610,"invKW":0.5,"batKWh":1,"commDate":"2026-04-11","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-008","business":"Rotanna Bolagab Pharmacy","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":8,"pvW":610,"invKW":6,"batKWh":5,"commDate":"2026-04-13","status":"Commissioned","beneficiaries":2,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-009","business":"Cellent Medicals","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":1,"pvW":600,"invKW":0.5,"batKWh":1,"commDate":"2026-04-15","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-010","business":"Sunshade Global Enterprise","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":2,"pvW":455,"invKW":1.5,"batKWh":2.5,"commDate":"2026-04-16","status":"Commissioned","beneficiaries":2,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-011","business":"Great God Venture","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":0,"pvW":0,"invKW":0.5,"batKWh":1,"commDate":"2026-04-23","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-012","business":"Ruzu Bitters","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":1,"pvW":610,"invKW":0.5,"batKWh":1,"commDate":"2026-04-23","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-013","business":"Cashmed Pharmacy","category":"SME","cluster":"Idumota, Lagos","cls":"GBS","pvQty":0,"pvW":0,"invKW":0.5,"batKWh":1,"commDate":"2026-04-17","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-014","business":"Herbolly Nigeria Enterprise","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":1,"pvW":610,"invKW":0.5,"batKWh":1,"commDate":"2026-04-25","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-015","business":"Raji Lukman","category":"Residential","cluster":"Idumota, Lagos","cls":"SGS","pvQty":4,"pvW":455,"invKW":1.2,"batKWh":3.6,"commDate":"2026-04-25","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-016","business":"Avarta Kacee","category":"SME","cluster":"Idumota, Lagos","cls":"GBS","pvQty":0,"pvW":0,"invKW":0.5,"batKWh":1,"commDate":"2026-04-28","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-017","business":"Chidera Udegbunam","category":"Residential","cluster":"FCT, Abuja","cls":"SGS","pvQty":3,"pvW":457,"invKW":2,"batKWh":3.8,"commDate":"2026-04-29","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-018","business":"Omar Global Venture","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":4,"pvW":455,"invKW":1.2,"batKWh":3.6,"commDate":"2026-05-02","status":"Commissioned","beneficiaries":0,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-019","business":"De Stan Mega Enterprises","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":3,"pvW":590,"invKW":1.2,"batKWh":3.6,"commDate":"2026-05-04","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-020","business":"C Emmanuel Pharmacy","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":2,"pvW":455,"invKW":1.5,"batKWh":2.5,"commDate":"2026-05-05","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-021","business":"Dave Pharmacy","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":3,"pvW":457,"invKW":2,"batKWh":2.5,"commDate":"2026-05-07","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-022","business":"Mega Drugs LTD","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":3,"pvW":610,"invKW":2,"batKWh":3.8,"commDate":"2026-05-11","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-023","business":"Nnaemeka Pascal Ikezuagu","category":"Residential","cluster":"Ebute Metta, Lagos","cls":"SGS","pvQty":3,"pvW":457,"invKW":2,"batKWh":3.6,"commDate":"2026-05-11","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-024","business":"Samuel Duru","category":"SME","cluster":"Port Harcourt, Rivers","cls":"SGS","pvQty":0,"pvW":0,"invKW":6,"batKWh":16,"commDate":"2026-05-14","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-025","business":"Samarac Communications","category":"SME","cluster":"Igando, Lagos","cls":"SGS","pvQty":3,"pvW":450,"invKW":3,"batKWh":2.5,"commDate":"2026-05-13","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-026","business":"Remac Pharmacy","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":2,"pvW":610,"invKW":2,"batKWh":3.8,"commDate":"2026-05-15","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-027","business":"Jonathan Chukwu","category":"Residential","cluster":"FCT, Abuja","cls":"SGS","pvQty":6,"pvW":630,"invKW":6,"batKWh":5,"commDate":"2026-05-14","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-028","business":"Arose Pharmacy","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":0,"pvW":0,"invKW":0.5,"batKWh":1,"commDate":"2026-05-18","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-029","business":"CO Ematex Divine Concept LTD","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":1,"pvW":610,"invKW":0.5,"batKWh":1,"commDate":"2026-05-20","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-030","business":"Darlington Onyemere","category":"Residential","cluster":"Uyo, Akwa Ibom","cls":"SGS","pvQty":1,"pvW":630,"invKW":0.5,"batKWh":1,"commDate":"2026-05-22","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-031","business":"Amarachi Onyenagubo","category":"Residential","cluster":"Sangotedo, Lagos","cls":"SGS","pvQty":0,"pvW":0,"invKW":1.5,"batKWh":4,"commDate":"2026-05-28","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-032","business":"Michael Chinedu","category":"Residential","cluster":"Festac, Lagos","cls":"SGS","pvQty":0,"pvW":0,"invKW":0.5,"batKWh":1,"commDate":"2026-05-28","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-033","business":"Joy Ifeoma Asolo","category":"Residential","cluster":"Epe, Lagos","cls":"SGS","pvQty":4,"pvW":365,"invKW":2,"batKWh":3.8,"commDate":"2026-05-31","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-034","business":"U3C Comestics","category":"Residential","cluster":"Isheri-Oshun, Lagos","cls":"SGS","pvQty":5,"pvW":620,"invKW":4,"batKWh":5,"commDate":"2026-06-07","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-035","business":"Silver and Gold Nig. LTD","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":5,"pvW":610,"invKW":6,"batKWh":5,"commDate":"2026-07-16","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-036","business":"Elevance Solutions LTD","category":"Residential","cluster":"Lekki, Lagos","cls":"SGS","pvQty":6,"pvW":610,"invKW":6,"batKWh":10,"commDate":"2026-06-17","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]},{"_id":null,"ref":"KIRU-P1-037","business":"Urch Delight Enterprise","category":"SME","cluster":"Idumota, Lagos","cls":"SGS","pvQty":4,"pvW":590,"invKW":3,"batKWh":2.5,"commDate":"2026-06-29","status":"Commissioned","beneficiaries":1,"mediaLink":"","iotLink":"","checks":[true,true,true,true,true]}];
 async function seedIfEmpty(){
@@ -296,12 +361,12 @@ async function pull(){
   return data.map(rowToSite);
 }
 async function initData(){
-  if(!cfgOK() || !window.supabase){ sites=[newSite(1)]; cur=0; renderTabs(); renderForm(); render(); return; }
+  if(!cfgOK() || !window.supabase){ sites=[newSite(1)]; cur=0; renderTabs(); renderForm(); render(); setSaveStatus("dirty"); return; }
   SB=window.supabase.createClient(window.KIRU_CONFIG.SUPABASE_URL, window.KIRU_CONFIG.SUPABASE_ANON_KEY);
   const {data:{session}}=await SB.auth.getSession();
   if(!session){
     setSyncBanner("Not signed in — sign in from the main Kiru app in another tab, then reload this page to load and save the Q1 installation register.", false);
-    sites=[newSite(1)]; cur=0; renderTabs(); renderForm(); render();
+    sites=[newSite(1)]; cur=0; renderTabs(); renderForm(); render(); setSaveStatus("dirty");
     return;
   }
   synced=true;
@@ -309,9 +374,19 @@ async function initData(){
   sites=await pull();
   if(!sites.length){ sites=[newSite(1)]; }
   cur=0;
+  await loadMeta();
   setSyncBanner(seeded ? "Loaded the Q1 installation register from the PDF and saved it to the database." : "Synced with the database — edits are saved automatically.", true);
   renderTabs(); renderForm(); render();
+  setSaveStatus(autosaveOn?"saved":"dirty");
 }
+$("asToggle").checked=autosaveOn;
+$("asToggle").addEventListener("change",e=>{
+  autosaveOn=e.target.checked;
+  localStorage.setItem("kiru_autosave_"+REPORT_KEY, autosaveOn?"on":"off");
+  if(autosaveOn){ if(siteDirty.size||metaDirty) saveAllNow(); else setSaveStatus("saved"); }
+  else setSaveStatus(siteDirty.size||metaDirty?"dirty":"saved");
+});
+$("saveNow").addEventListener("click",saveAllNow);
 
 function processSignature(dataURL,cb){
   const img=new Image();
@@ -339,7 +414,7 @@ function processSignature(dataURL,cb){
 $("signFile").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f)return;
   const r=new FileReader();
-  r.onload=()=>processSignature(r.result,out=>{signImg=out; const th=$("signThumb"); th.src=out; th.classList.add("show"); render();});
+  r.onload=()=>processSignature(r.result,out=>{signImg=out; const th=$("signThumb"); th.src=out; th.classList.add("show"); render(); queueMetaSave();});
   r.readAsDataURL(f);
 });
 
@@ -484,7 +559,7 @@ function render(){
 }
 
 $("repDate").value=new Date().toISOString().slice(0,10);
-["title","period","repDate","prog","delRef","project","subTo","signName","signTitle","execSum","decl"].forEach(id=>$(id).addEventListener("input",()=>{render(); if(id==="period") sites.forEach((_,i)=>queueSave(i));}));
+META_FIELDS.forEach(id=>$(id).addEventListener("input",()=>{render(); queueMetaSave(); if(id==="period") sites.forEach((_,i)=>queueSave(i));}));
 $("dlPdf").addEventListener("click",()=>window.print());
 initData();
 </script>

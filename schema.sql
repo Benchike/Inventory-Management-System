@@ -355,6 +355,30 @@ do $$ begin
 end $$;
 
 -- ============================================================
+-- LIF REPORT META (letterhead / top-level fields for the Phase 1
+-- Deployment Report and Deployment Cost Manager tools)
+-- ============================================================
+
+create table if not exists public.lif_report_meta (
+  report_key  text primary key,
+  data        jsonb not null default '{}'::jsonb,
+  updated_at  timestamptz default now()
+);
+
+alter table public.lif_report_meta enable row level security;
+drop policy if exists lif_report_meta_rw on public.lif_report_meta;
+create policy lif_report_meta_rw on public.lif_report_meta for all to authenticated using (true) with check (true);
+
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'lif_report_meta'
+  ) then
+    alter publication supabase_realtime add table public.lif_report_meta;
+  end if;
+end $$;
+
+-- ============================================================
 -- FUNCTIONS — COMPANY
 -- ============================================================
 

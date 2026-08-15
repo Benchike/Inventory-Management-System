@@ -75,6 +75,19 @@
   .btn{width:100%;font-family:inherit;font-size:.85rem;font-weight:700;cursor:pointer;border-radius:10px;padding:12px;border:1px solid transparent;background:var(--blue);color:#04121f}
   .btn:hover{background:var(--blue-deep)}
   .hint{font-size:.7rem;color:var(--muted);margin-top:8px;line-height:1.45;text-align:center}
+
+  .asbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+  .asswitch{position:relative;display:inline-block;width:38px;height:22px;flex:none;cursor:pointer}
+  .asswitch input{opacity:0;width:0;height:0;position:absolute}
+  .asdot{position:absolute;inset:0;background:var(--line);border-radius:999px;transition:.15s}
+  .asdot::before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s}
+  .asswitch input:checked+.asdot{background:var(--blue)}
+  .asswitch input:checked+.asdot::before{transform:translateX(16px)}
+  .asinfo{display:flex;flex-direction:column;flex:1;min-width:0}
+  .aslabel{font-size:.74rem;font-weight:700;color:var(--text)}
+  .asstatus{font-size:.66rem;font-weight:600;color:var(--muted)}
+  .assavebtn{font-family:inherit;font-size:.72rem;font-weight:700;color:var(--blue-deep);background:var(--card-bg);border:1px solid var(--line);border-radius:8px;padding:7px 11px;cursor:pointer;flex:none}
+  .assavebtn:hover{border-color:var(--blue)}
   .previewpane{display:flex;justify-content:center;overflow-x:auto}
   /* ===== PAPER ===== */
   .paper{width:1090px;background:#fff;color:#021431;border:1px solid #e3e9f1;border-radius:6px;box-shadow:0 14px 50px -24px rgba(2,20,49,.45);overflow:hidden;font-size:12px}
@@ -157,6 +170,11 @@
       <div class="sec">
         <h2>Report header</h2>
         <div id="syncBanner" style="display:none;font-size:.72rem;font-weight:600;padding:8px 10px;border-radius:8px;border:1px solid var(--line);margin-bottom:10px;line-height:1.4"></div>
+        <div class="asbar">
+          <label class="asswitch"><input type="checkbox" id="asToggle" checked><span class="asdot"></span></label>
+          <div class="asinfo"><span class="aslabel">Autosave</span><span class="asstatus" id="saveStatus">All changes saved</span></div>
+          <button class="assavebtn" id="saveNow" type="button">Save now</button>
+        </div>
         <div class="mb"><span class="lab">Title</span><input id="title" value="Deployment Cost Report"></div>
         <div class="row2 mb"><div><span class="lab">Reporting period</span><input id="period" value="Q1 · April – June 2026"></div><div><span class="lab">Date</span><input type="date" id="repDate"></div></div>
         <div class="row2"><div><span class="lab">Project</span><input id="project" value="Pawabiz"></div><div><span class="lab">Exchange rate <small>(₦ / €)</small></span><input type="number" id="fx" value="1572.35" step="0.01"></div></div>
@@ -225,7 +243,17 @@ let sites=[];
 let cur=0, dragFrom=null;
 
 /* ============ SUPABASE DATA LAYER ============ */
+const REPORT_KEY="deployment_cost";
+const META_FIELDS=["title","period","repDate","project","fx"];
+let autosaveOn = localStorage.getItem("kiru_autosave_"+REPORT_KEY) !== "off";
+let siteDirty=new Set(), metaDirty=false, metaSaveTimer=null;
 let SB=null, synced=false, saveTimers={};
+function setSaveStatus(state){
+  const el=$("saveStatus"); if(!el) return;
+  if(state==="saving"){ el.textContent="Saving…"; el.style.color="var(--muted)"; }
+  else if(state==="dirty"){ el.textContent="Unsaved changes"; el.style.color="var(--amber)"; }
+  else { el.textContent="All changes saved"; el.style.color="var(--green)"; }
+}
 function cfgOK(){const c=window.KIRU_CONFIG||{};return c.SUPABASE_URL&&c.SUPABASE_ANON_KEY&&!/YOUR-/.test(c.SUPABASE_URL+c.SUPABASE_ANON_KEY);}
 function setSyncBanner(msg,ok){
   const b=$("syncBanner"); if(!b)return;
@@ -260,8 +288,10 @@ async function saveSite(i){
 }
 function queueSave(i){
   if(!SB||!synced) return;
+  if(!autosaveOn){ siteDirty.add(i); setSaveStatus("dirty"); return; }
+  setSaveStatus("saving");
   clearTimeout(saveTimers[i]);
-  saveTimers[i]=setTimeout(()=>saveSite(i),650);
+  saveTimers[i]=setTimeout(async()=>{ await saveSite(i); setSaveStatus("saved"); },650);
 }
 async function deleteSiteRow(id){
   if(!SB||!synced||!id) return;
@@ -271,6 +301,40 @@ async function deleteSiteRow(id){
 async function resequenceAll(){
   if(!SB||!synced) return;
   await Promise.all(sites.map((s,i)=> s._id ? SB.from("lif_deployment_costs").update({sort_order:i}).eq("id",s._id) : Promise.resolve()));
+}
+function metaToObj(){
+  const o={}; META_FIELDS.forEach(id=>o[id]=val(id)); return o;
+}
+function applyMetaObj(o){
+  if(!o) return;
+  META_FIELDS.forEach(id=>{ if(o[id]!==undefined && $(id)) $(id).value=o[id]; });
+}
+async function loadMeta(){
+  if(!SB||!synced) return;
+  const {data,error}=await SB.from("lif_report_meta").select("data").eq("report_key",REPORT_KEY).maybeSingle();
+  if(error){ console.error("meta load error",error); return; }
+  if(data&&data.data) applyMetaObj(data.data);
+}
+async function saveMetaNow(){
+  if(!SB||!synced) return;
+  const {error}=await SB.from("lif_report_meta").upsert({report_key:REPORT_KEY,data:metaToObj(),updated_at:new Date().toISOString()},{onConflict:"report_key"});
+  if(error){ console.error("meta save error",error); return; }
+  metaDirty=false;
+}
+function queueMetaSave(){
+  if(!SB||!synced) return;
+  if(!autosaveOn){ metaDirty=true; setSaveStatus("dirty"); return; }
+  setSaveStatus("saving");
+  clearTimeout(metaSaveTimer);
+  metaSaveTimer=setTimeout(async()=>{ await saveMetaNow(); setSaveStatus("saved"); },650);
+}
+async function saveAllNow(){
+  if(!SB||!synced){ alert("Sign in from the main Kiru app to save."); return; }
+  setSaveStatus("saving");
+  await Promise.all(sites.map((s,i)=>saveSite(i)));
+  await saveMetaNow();
+  siteDirty.clear(); metaDirty=false;
+  setSaveStatus("saved");
 }
 const SEED_SITES = [{"_id":null,"ref":"KIRU-P1-001","customer":"Global New Life","location":"Idumota Market, Lagos","date":"2026-04-01","cls":"SGS","config":"separate","panels":{"q":2,"p":155000,"cap":"600 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":255000,"cap":""},"iot":{"q":0,"p":0,"cap":""}},{"_id":null,"ref":"KIRU-P1-002","customer":"Coco Extension","location":"Owerri, Imo State","date":"2026-04-02","cls":"SGS","config":"aio","panels":{"q":1,"p":150000,"cap":"590 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":330000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":95000,"cap":""},"iot":{"q":1,"p":80000,"cap":""}},{"_id":null,"ref":"KIRU-P1-003","customer":"Henry Ezeobi","location":"Enugu","date":"2026-04-04","cls":"SGS","config":"separate","panels":{"q":6,"p":155000,"cap":"610 W"},"inverter":{"q":1,"p":550000,"cap":"6 kW"},"battery":{"q":1,"p":1100000,"cap":"5 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":255000,"cap":""},"iot":{"q":1,"p":80000,"cap":""}},{"_id":null,"ref":"KIRU-P1-004","customer":"Spine Product LTD","location":"Idumota, Lagos","date":"2026-04-07","cls":"GBS","config":"aio","panels":{"q":0,"p":0,"cap":""},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":350000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":25000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-005","customer":"Benvic Pharmacy","location":"Idumota, Lagos","date":"2026-04-07","cls":"GBS","config":"aio","panels":{"q":0,"p":0,"cap":""},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":340000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":25000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-006","customer":"Sir Ken Pharmacy","location":"Idumota, Lagos","date":"2026-04-09","cls":"SGS","config":"aio","panels":{"q":1,"p":155000,"cap":"610 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":340000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":130000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-007","customer":"God of Elijah Enterprise","location":"Idumota, Lagos","date":"2026-04-11","cls":"SGS","config":"aio","panels":{"q":1,"p":155000,"cap":"610 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":350000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":120000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-008","customer":"Rotanna Bolagab Pharmacy","location":"Idumota, Lagos","date":"2026-04-13","cls":"SGS","config":"separate","panels":{"q":8,"p":155000,"cap":"610 W"},"inverter":{"q":1,"p":600000,"cap":"6 kW"},"battery":{"q":1,"p":1100000,"cap":"5 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":395000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-009","customer":"Cellent Medicals","location":"Idumota, Lagos","date":"2026-04-15","cls":"SGS","config":"aio","panels":{"q":1,"p":150000,"cap":"600 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":340000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":95000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-010","customer":"Sunshade Global Enterprise","location":"Idumota, Lagos","date":"2026-04-16","cls":"SGS","config":"separate","panels":{"q":2,"p":115000,"cap":"455 W"},"inverter":{"q":1,"p":220000,"cap":"1.5 kW"},"battery":{"q":1,"p":390000,"cap":"2.5 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":209000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-013","customer":"Cashmed Pharmacy","location":"Idumota, Lagos","date":"2026-04-17","cls":"GBS","config":"aio","panels":{"q":0,"p":0,"cap":""},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":340000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":25000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-011","customer":"Great God Venture","location":"Idumota, Lagos","date":"2026-04-23","cls":"GBS","config":"aio","panels":{"q":0,"p":0,"cap":""},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":340000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":25000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-012","customer":"Ruzu Bitters","location":"Idumota, Lagos","date":"2026-04-23","cls":"SGS","config":"aio","panels":{"q":1,"p":155000,"cap":"610 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":340000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":115000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-014","customer":"Herbolly Nigeria Enterprise","location":"Idumota, Lagos","date":"2026-04-25","cls":"SGS","config":"aio","panels":{"q":1,"p":155000,"cap":"610 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":330000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":130000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-015","customer":"Raji Lukmon","location":"Idumota, Lagos","date":"2026-04-25","cls":"SGS","config":"aio","panels":{"q":4,"p":115000,"cap":"455 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":750000,"cap":"1.2 kW + 3.6 kWh"},"bos":{"q":1,"p":195000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-016","customer":"Avarta Kacee","location":"Idumota, Lagos","date":"2026-04-28","cls":"GBS","config":"aio","panels":{"q":0,"p":0,"cap":""},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":330000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":25000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-017","customer":"Chidera Udegbunam","location":"FCT, Abuja","date":"2026-04-29","cls":"SGS","config":"separate","panels":{"q":3,"p":115000,"cap":"455 W"},"inverter":{"q":1,"p":250000,"cap":"2 kW"},"battery":{"q":1,"p":490000,"cap":"3.8 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":235000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-018","customer":"Omar Global Venture","location":"Idumota, Lagos","date":"2026-05-02","cls":"SGS","config":"aio","panels":{"q":4,"p":115000,"cap":"455 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":750000,"cap":"1.2 kW + 3.6 kWh"},"bos":{"q":1,"p":235000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-032","customer":"De Stan Mega Enterprises","location":"Idumota, Lagos","date":"2026-05-04","cls":"SGS","config":"aio","panels":{"q":3,"p":150000,"cap":"590 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":780000,"cap":"1.2 kW + 3.6 kWh"},"bos":{"q":1,"p":225000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-019","customer":"C Emmanuel Pharmacy","location":"Idumota, Lagos","date":"2026-05-05","cls":"SGS","config":"separate","panels":{"q":2,"p":115000,"cap":"455 W"},"inverter":{"q":1,"p":220000,"cap":"1.5 kW"},"battery":{"q":1,"p":390000,"cap":"2.5 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":225000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-020","customer":"Dave Pharmacy","location":"Idumota, Lagos","date":"2026-05-07","cls":"SGS","config":"separate","panels":{"q":3,"p":115000,"cap":"455 W"},"inverter":{"q":1,"p":250000,"cap":"2 kW"},"battery":{"q":1,"p":390000,"cap":"2.5 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":245000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-021","customer":"Mega Drugs LTD","location":"Idumota, Lagos","date":"2026-05-11","cls":"SGS","config":"separate","panels":{"q":3,"p":155000,"cap":"610 W"},"inverter":{"q":1,"p":250000,"cap":"2 kW"},"battery":{"q":1,"p":490000,"cap":"3.8 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":315000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-022","customer":"Nnaemeka Pascal Ikezuagu","location":"Ebute Metta, Lagos","date":"2026-05-11","cls":"SGS","config":"aio","panels":{"q":3,"p":115000,"cap":"455 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":750000,"cap":"1.2 kW + 3.6 kWh"},"bos":{"q":1,"p":215000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-023","customer":"Samuel Duru","location":"Port Harcourt, Rivers","date":"2026-05-12","cls":"GBS","config":"separate","panels":{"q":0,"p":0,"cap":""},"inverter":{"q":1,"p":650000,"cap":"6 kW"},"battery":{"q":1,"p":2750000,"cap":"16 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":240000,"cap":""},"iot":{"q":0,"p":0,"cap":""}},{"_id":null,"ref":"KIRU-P1-024","customer":"Samarac Communications","location":"Igando, Lagos","date":"2026-05-13","cls":"SGS","config":"separate","panels":{"q":3,"p":115000,"cap":"455 W"},"inverter":{"q":1,"p":330000,"cap":"3 kW"},"battery":{"q":1,"p":600000,"cap":"2.5 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":285000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-025","customer":"Remac Pharmacy","location":"Idumota, Lagos","date":"2026-05-15","cls":"SGS","config":"separate","panels":{"q":2,"p":155000,"cap":"610 W"},"inverter":{"q":1,"p":250000,"cap":"2 kW"},"battery":{"q":1,"p":530000,"cap":"3.8 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":235000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-026","customer":"Jonathan Chukwu","location":"FCT, Abuja","date":"2026-05-16","cls":"SGS","config":"separate","panels":{"q":6,"p":158000,"cap":"630 W"},"inverter":{"q":1,"p":600000,"cap":"6 kW"},"battery":{"q":1,"p":1100000,"cap":"5 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":315000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-027","customer":"Arose Pharmacy","location":"Idumota, Lagos","date":"2026-05-18","cls":"GBS","config":"aio","panels":{"q":0,"p":0,"cap":""},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":330000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":25000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-028","customer":"CO Ematex Divine Concept LTD","location":"Idumota, Lagos","date":"2026-05-20","cls":"SGS","config":"aio","panels":{"q":1,"p":155000,"cap":"610 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":330000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":125000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-029","customer":"Darlington Onyemere","location":"Uyo, Akwa Ibom","date":"2026-05-22","cls":"SGS","config":"aio","panels":{"q":1,"p":160000,"cap":"630 W"},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":330000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":165000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-030","customer":"Amarachi Onyenagubo","location":"Sangotedo, Lagos","date":"2026-05-28","cls":"GBS","config":"aio","panels":{"q":0,"p":0,"cap":""},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":850000,"cap":"1.5 kW + 4 kWh"},"bos":{"q":1,"p":81000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-037","customer":"Michael Chinedu","location":"Festac, Lagos","date":"2026-05-28","cls":"GBS","config":"aio","panels":{"q":0,"p":0,"cap":""},"inverter":{"q":0,"p":0,"cap":""},"battery":{"q":0,"p":0,"cap":""},"generator":{"q":1,"p":280000,"cap":"500 W + 1 kWh"},"bos":{"q":1,"p":25000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-031","customer":"Joy Ifeoma Asolo","location":"Epe, Lagos","date":"2026-05-31","cls":"SGS","config":"separate","panels":{"q":4,"p":105000,"cap":"365 W"},"inverter":{"q":1,"p":250000,"cap":"2 kW"},"battery":{"q":1,"p":530000,"cap":"3.8 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":255000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-033","customer":"U3C Comestics","location":"Isheri-Oshun, Lagos","date":"2026-06-07","cls":"SGS","config":"separate","panels":{"q":5,"p":158000,"cap":"620 W"},"inverter":{"q":1,"p":420000,"cap":"4 kW"},"battery":{"q":1,"p":980000,"cap":"5 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":278000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-034","customer":"Silver and Gold Nig. LTD","location":"Idumota, Lagos","date":"2026-06-16","cls":"SGS","config":"separate","panels":{"q":5,"p":155000,"cap":"610 W"},"inverter":{"q":1,"p":545000,"cap":"6 kW"},"battery":{"q":1,"p":910000,"cap":"5 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":327000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}},{"_id":null,"ref":"KIRU-P1-035","customer":"Elevance Solutions LTD","location":"Lekki, Lagos","date":"2026-06-17","cls":"SGS","config":"separate","panels":{"q":6,"p":155000,"cap":"610 W"},"inverter":{"q":1,"p":545000,"cap":"6 kW"},"battery":{"q":1,"p":1750000,"cap":"10 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":365000,"cap":""},"iot":{"q":0,"p":0,"cap":""}},{"_id":null,"ref":"KIRU-P1-036","customer":"Urch Delight Enterprise","location":"Idumota, Lagos","date":"2026-06-29","cls":"SGS","config":"separate","panels":{"q":4,"p":150000,"cap":"590 W"},"inverter":{"q":1,"p":330000,"cap":"3 kW"},"battery":{"q":1,"p":600000,"cap":"2.5 kWh"},"generator":{"q":0,"p":0,"cap":""},"bos":{"q":1,"p":235000,"cap":""},"iot":{"q":1,"p":47000,"cap":""}}];
 async function seedIfEmpty(){
@@ -288,12 +352,12 @@ async function pull(){
   return data.map(rowToSite);
 }
 async function initData(){
-  if(!cfgOK() || !window.supabase){ sites=[newSite(1)]; cur=0; renderTabs(); renderForm(); render(); return; }
+  if(!cfgOK() || !window.supabase){ sites=[newSite(1)]; cur=0; renderTabs(); renderForm(); render(); setSaveStatus("dirty"); return; }
   SB=window.supabase.createClient(window.KIRU_CONFIG.SUPABASE_URL, window.KIRU_CONFIG.SUPABASE_ANON_KEY);
   const {data:{session}}=await SB.auth.getSession();
   if(!session){
     setSyncBanner("Not signed in — sign in from the main Kiru app in another tab, then reload this page to load and save the Q1 deployment cost register.", false);
-    sites=[newSite(1)]; cur=0; renderTabs(); renderForm(); render();
+    sites=[newSite(1)]; cur=0; renderTabs(); renderForm(); render(); setSaveStatus("dirty");
     return;
   }
   synced=true;
@@ -301,9 +365,19 @@ async function initData(){
   sites=await pull();
   if(!sites.length){ sites=[newSite(1)]; }
   cur=0;
+  await loadMeta();
   setSyncBanner(seeded ? "Loaded the Q1 deployment cost register from the PDF and saved it to the database." : "Synced with the database — edits are saved automatically.", true);
   renderTabs(); renderForm(); render();
+  setSaveStatus(autosaveOn?"saved":"dirty");
 }
+$("asToggle").checked=autosaveOn;
+$("asToggle").addEventListener("change",e=>{
+  autosaveOn=e.target.checked;
+  localStorage.setItem("kiru_autosave_"+REPORT_KEY, autosaveOn?"on":"off");
+  if(autosaveOn){ if(siteDirty.size||metaDirty) saveAllNow(); else setSaveStatus("saved"); }
+  else setSaveStatus(siteDirty.size||metaDirty?"dirty":"saved");
+});
+$("saveNow").addEventListener("click",saveAllNow);
 
 function lineDefs(s){
   const L=[];
@@ -493,7 +567,7 @@ function render(){
 }
 
 $("repDate").value=new Date().toISOString().slice(0,10);
-["title","period","repDate","project","fx"].forEach(id=>$(id).addEventListener("input",()=>{render(); if(id==="fx")renderForm(); if(id==="period") sites.forEach((_,i)=>queueSave(i));}));
+META_FIELDS.forEach(id=>$(id).addEventListener("input",()=>{render(); queueMetaSave(); if(id==="fx")renderForm(); if(id==="period") sites.forEach((_,i)=>queueSave(i));}));
 $("dlPdf").addEventListener("click",()=>window.print());
 initData();
 </script>
