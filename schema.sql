@@ -204,6 +204,66 @@ do $$ begin
 end $$;
 
 -- ============================================================
+-- COMPANY PPE REGISTER (property, plant & equipment acquired)
+-- ============================================================
+
+create table if not exists public.ppe_assets (
+  id                uuid primary key default gen_random_uuid(),
+  tag               text not null default '',
+  name              text not null default '',
+  category          text not null default 'IT Equipment',
+  serial_no         text default '',
+  date_acquired     date,
+  cost              numeric not null default 0,
+  supplier          text default '',
+  location          text default '',
+  custodian         text default '',
+  status            text not null default 'In Use' check (status in ('In Use','In Storage','Under Maintenance','Disposed')),
+  useful_life_years numeric default 0,
+  disposed_date     date,
+  disposed_value    numeric,
+  notes             text default '',
+  photo             text default '',
+  created_by        text default '',
+  created_at        timestamptz default now(),
+  updated_at        timestamptz default now()
+);
+
+create index if not exists ppe_assets_status_idx on public.ppe_assets (status, created_at desc);
+
+create table if not exists public.ppe_counters (
+  counter_key text primary key,
+  value       integer not null default 0
+);
+
+create or replace function public.next_ppe_tag()
+returns text language plpgsql security definer as $$
+declare v integer;
+begin
+  update public.ppe_counters set value = value + 1 where counter_key = 'global' returning value into v;
+  if v is null then
+    insert into public.ppe_counters(counter_key, value) values ('global', 1) returning value into v;
+  end if;
+  return 'KIRU-PPE-' || lpad(v::text, 4, '0');
+end $$;
+
+alter table public.ppe_assets    enable row level security;
+alter table public.ppe_counters  enable row level security;
+drop policy if exists ppe_assets_rw   on public.ppe_assets;
+drop policy if exists ppe_counters_r  on public.ppe_counters;
+create policy ppe_assets_rw   on public.ppe_assets    for all    to authenticated using (true) with check (true);
+create policy ppe_counters_r  on public.ppe_counters  for select to authenticated using (true);
+
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'ppe_assets'
+  ) then
+    alter publication supabase_realtime add table public.ppe_assets;
+  end if;
+end $$;
+
+-- ============================================================
 -- LIF INVENTORY
 -- ============================================================
 
