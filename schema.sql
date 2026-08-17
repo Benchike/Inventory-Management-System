@@ -439,6 +439,95 @@ do $$ begin
 end $$;
 
 -- ============================================================
+-- LIF TIME SHEET (work days logged per team member)
+-- ============================================================
+
+create table if not exists public.lif_timesheet_entries (
+  id          uuid primary key default gen_random_uuid(),
+  work_date   date not null default current_date,
+  member_name text not null default '',
+  role_title  text default '',
+  department  text default '',
+  site        text default '',
+  day_rate    numeric not null default 0,
+  days        numeric not null default 1,
+  notes       text default '',
+  created_by  text default '',
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+create index if not exists lif_timesheet_entries_date_idx on public.lif_timesheet_entries (work_date desc);
+
+alter table public.lif_timesheet_entries enable row level security;
+drop policy if exists lif_timesheet_entries_rw on public.lif_timesheet_entries;
+create policy lif_timesheet_entries_rw on public.lif_timesheet_entries for all to authenticated using (true) with check (true);
+
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'lif_timesheet_entries'
+  ) then
+    alter publication supabase_realtime add table public.lif_timesheet_entries;
+  end if;
+end $$;
+
+-- ============================================================
+-- LIF EXPENSE TRACKER (project expenses incurred)
+-- ============================================================
+
+create table if not exists public.lif_expenses (
+  id             uuid primary key default gen_random_uuid(),
+  ref            text not null default '',
+  expense_date   date not null default current_date,
+  category       text not null default 'Miscellaneous' check (category in ('Logistics','Marketing','Site Expenses','Fixed Assets','Utilities','Professional Fees','Miscellaneous')),
+  description    text not null default '',
+  amount         numeric not null default 0,
+  site           text default '',
+  vendor         text default '',
+  payment_method text default '',
+  receipt        text default '',
+  notes          text default '',
+  created_by     text default '',
+  created_at     timestamptz default now(),
+  updated_at     timestamptz default now()
+);
+
+create index if not exists lif_expenses_date_idx on public.lif_expenses (expense_date desc);
+
+create table if not exists public.lif_expense_counters (
+  counter_key text primary key,
+  value       integer not null default 0
+);
+
+create or replace function public.next_expense_ref()
+returns text language plpgsql security definer as $$
+declare v integer;
+begin
+  update public.lif_expense_counters set value = value + 1 where counter_key = 'global' returning value into v;
+  if v is null then
+    insert into public.lif_expense_counters(counter_key, value) values ('global', 1) returning value into v;
+  end if;
+  return 'KIRU-EXP-' || lpad(v::text, 4, '0');
+end $$;
+
+alter table public.lif_expenses          enable row level security;
+alter table public.lif_expense_counters  enable row level security;
+drop policy if exists lif_expenses_rw         on public.lif_expenses;
+drop policy if exists lif_expense_counters_r  on public.lif_expense_counters;
+create policy lif_expenses_rw         on public.lif_expenses          for all    to authenticated using (true) with check (true);
+create policy lif_expense_counters_r  on public.lif_expense_counters  for select to authenticated using (true);
+
+do $$ begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'lif_expenses'
+  ) then
+    alter publication supabase_realtime add table public.lif_expenses;
+  end if;
+end $$;
+
+-- ============================================================
 -- FUNCTIONS — COMPANY
 -- ============================================================
 
