@@ -448,7 +448,6 @@ create table if not exists public.lif_timesheet_entries (
   member_name text not null default '',
   role_title  text default '',
   department  text default '',
-  site        text default '',
   day_rate    numeric not null default 0,
   days        numeric not null default 1,
   notes       text default '',
@@ -456,6 +455,8 @@ create table if not exists public.lif_timesheet_entries (
   created_at  timestamptz default now(),
   updated_at  timestamptz default now()
 );
+
+alter table public.lif_timesheet_entries drop column if exists site;
 
 create index if not exists lif_timesheet_entries_date_idx on public.lif_timesheet_entries (work_date desc);
 
