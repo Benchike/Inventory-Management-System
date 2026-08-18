@@ -83,7 +83,6 @@
   .modal .btn.del{background:none;border-color:#ff6b6b;color:#ff6b6b;flex:none}.modal .btn.del:hover{background:rgba(255,107,107,.1)}
   .modal .btn.cancel{background:var(--soft);border-color:var(--line);color:var(--text)}
   .amthint{font-size:.72rem;color:var(--muted);font-weight:600;margin-top:-4px}
-  .eursub{display:block;font-size:.68rem;font-weight:700;color:var(--blue-deep);margin-top:2px}
 
   /* ===== printable report ===== */
   #printArea{display:none}
@@ -146,7 +145,6 @@
   <div class="rangebar">
     <div class="fld"><span class="lab">From</span><input type="date" id="repFrom"></div>
     <div class="fld"><span class="lab">To</span><input type="date" id="repTo"></div>
-    <div class="fld"><span class="lab">Exchange rate (₦/€)</span><input type="number" id="fxRate" step="0.01" value="1572.35"></div>
     <button class="ghostbtn" id="downloadReport">📄 Download period summary (PDF)</button>
   </div>
 
@@ -185,7 +183,7 @@
         <div><span class="lab">Position / role</span><input type="text" id="fRole" list="roleList" placeholder="e.g. Solar Installer"></div>
         <div><span class="lab">Department</span><input type="text" id="fDept" list="deptList" placeholder="e.g. Field Installation"></div>
       </div>
-      <div><span class="lab">Day rate (₦)</span><input type="text" inputmode="numeric" id="fRate"></div>
+      <div><span class="lab">Day rate (€)</span><input type="text" inputmode="numeric" id="fRate"></div>
       <div class="amthint">Amount for this entry: <b id="amtPreview">₦0</b></div>
       <div><span class="lab">Notes <small>(optional)</small></span><textarea id="fNotes" style="min-height:60px"></textarea></div>
       <datalist id="memberList"></datalist>
@@ -235,9 +233,7 @@ applyTheme((window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)")
 document.getElementById("themeToggle").addEventListener("click",()=>applyTheme(root.getAttribute("data-theme")==="dark"?"light":"dark"));
 const $=id=>document.getElementById(id);
 const esc=s=>(s||"").toString().replace(/</g,"&lt;").replace(/"/g,"&quot;");
-const ngn=new Intl.NumberFormat("en-NG",{style:"currency",currency:"NGN",maximumFractionDigits:0});
 const eur=new Intl.NumberFormat("en-IE",{style:"currency",currency:"EUR",maximumFractionDigits:2});
-let fxRate=parseFloat(localStorage.getItem("kiru_fx_rate"))||1572.35;
 const num=id=>parseFloat(($(id).value||"").toString().replace(/,/g,""))||0;
 const n2=n=>Number(n||0).toLocaleString("en-US",{maximumFractionDigits:2});
 function today(){ return new Date().toISOString().slice(0,10); }
@@ -247,14 +243,8 @@ $("fRate").addEventListener("input",e=>{fmtCommasEl(e.target); updateAmtPreview(
 $("fDays").addEventListener("input",updateAmtPreview);
 function updateAmtPreview(){
   const amt=num("fRate")*(parseFloat($("fDays").value)||0);
-  $("amtPreview").textContent=ngn.format(amt)+" ("+eur.format(amt/fxRate)+")";
+  $("amtPreview").textContent=eur.format(amt);
 }
-$("fxRate").value=fxRate;
-$("fxRate").addEventListener("input",()=>{
-  fxRate=parseFloat($("fxRate").value)||1572.35;
-  localStorage.setItem("kiru_fx_rate",fxRate);
-  render();
-});
 
 const CO={name:"Kiru Energy Ltd",rc:"RC 1619891",addr:"44 Bourdillon Road, Ikoyi, Lagos, Nigeria",
   email:"Business@ourkiru.com",phone:"+234-813-026-6232",web:"www.ourkiru.com"};
@@ -329,7 +319,7 @@ function render(){
   $("kpiEntries").textContent=filtered.length;
   $("kpiMembers").textContent=members.size;
   $("kpiDays").textContent=n2(totalDays);
-  $("kpiPay").innerHTML=ngn.format(totalPay)+`<span class="eursub">${eur.format(totalPay/fxRate)}</span>`;
+  $("kpiPay").textContent=eur.format(totalPay);
 
   const tb=$("logTbody");
   if(!synced){ tb.innerHTML='<tr><td colspan="8" class="histempty">Sign in from the main Kiru app to view the time sheet.</td></tr>'; return; }
@@ -341,8 +331,8 @@ function render(){
       <td>${esc(e.role_title)||'—'}</td>
       <td>${esc(e.department)||'—'}</td>
       <td>${n2(e.days)}</td>
-      <td>${ngn.format(e.day_rate||0)}<span class="eursub">${eur.format((e.day_rate||0)/fxRate)}</span></td>
-      <td class="amt">${ngn.format((Number(e.days)||0)*(Number(e.day_rate)||0))}<span class="eursub">${eur.format((Number(e.days)||0)*(Number(e.day_rate)||0)/fxRate)}</span></td>
+      <td>${eur.format(e.day_rate||0)}</td>
+      <td class="amt">${eur.format((Number(e.days)||0)*(Number(e.day_rate)||0))}</td>
       <td><div class="rowactions">
         <button class="abtn" data-act="edit" data-id="${e.id}">Edit</button>
         ${isAdmin()?`<button class="abtn danger" data-act="delete" data-id="${e.id}">Delete</button>`:''}
@@ -428,26 +418,26 @@ function timesheetReportHTML(from,to){
   const members=new Set(rows.map(r=>r.member_name));
 
   const summaryBody=rows.map(r=>`<tr><td class="l">${esc(r.member_name)}</td><td class="l">${esc(r.role_title)||'—'}</td><td class="l">${esc(r.department)||'—'}</td>
-      <td>${ngn.format(r.day_rate||0)}<span class="eursub">${eur.format((r.day_rate||0)/fxRate)}</span></td><td>${n2(r.days)}</td>
-      <td>${ngn.format(r.days*(r.day_rate||0))}<span class="eursub">${eur.format(r.days*(r.day_rate||0)/fxRate)}</span></td></tr>`).join("");
+      <td>${eur.format(r.day_rate||0)}</td><td>${n2(r.days)}</td>
+      <td>${eur.format(r.days*(r.day_rate||0))}</td></tr>`).join("");
 
   const logRows=inRange.slice().sort((a,b)=>(a.work_date||"").localeCompare(b.work_date||"")).map(e=>
     `<tr><td class="c">${fmtDate(e.work_date)}</td><td class="l">${esc(e.member_name)}</td><td class="l">${esc(e.role_title)||'—'}</td><td class="l">${esc(e.department)||'—'}</td>
-      <td>${n2(e.days)}</td><td>${ngn.format((Number(e.days)||0)*(Number(e.day_rate)||0))}<span class="eursub">${eur.format((Number(e.days)||0)*(Number(e.day_rate)||0)/fxRate)}</span></td></tr>`).join("");
+      <td>${n2(e.days)}</td><td>${eur.format((Number(e.days)||0)*(Number(e.day_rate)||0))}</td></tr>`).join("");
 
   return `<div class="docwrap">
-    ${docHead("TIME SHEET SUMMARY",`<b>Period:</b> ${fmtDate(from)} – ${fmtDate(to)}<br><b>Exchange rate:</b> ₦${n2(fxRate)}/€1.00<br><b>Generated:</b> ${fmtDate(today())}`)}
+    ${docHead("TIME SHEET SUMMARY",`<b>Period:</b> ${fmtDate(from)} – ${fmtDate(to)}<br><b>Generated:</b> ${fmtDate(today())}`)}
     <div class="rep-kpi">
       <div class="c"><div class="l">Team members</div><div class="v">${members.size}</div></div>
       <div class="c"><div class="l">Entries logged</div><div class="v">${inRange.length}</div></div>
       <div class="c"><div class="l">Total days worked</div><div class="v">${n2(totalDays)}</div></div>
-      <div class="c dk"><div class="l">Total pay</div><div class="v">${ngn.format(totalPay)}</div><div class="x" style="color:#8aa9c4;font-size:10px;margin-top:2px">${eur.format(totalPay/fxRate)}</div></div>
+      <div class="c dk"><div class="l">Total pay</div><div class="v">${eur.format(totalPay)}</div></div>
     </div>
     <div class="rep-h">Pay Summary by Team Member</div>
     <table class="doc"><colgroup><col><col style="width:120px"><col style="width:130px"><col style="width:80px"><col style="width:60px"><col style="width:90px"></colgroup>
       <thead><tr><th class="l">Name</th><th class="l">Position</th><th class="l">Department</th><th>Day Rate</th><th>Days</th><th>Amount</th></tr></thead>
       <tbody>${summaryBody||'<tr><td colspan="6" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No entries in this period</td></tr>'}
-        <tr class="tot"><td class="l" style="color:#fff">TOTAL</td><td></td><td></td><td></td><td>${n2(totalDays)}</td><td>${ngn.format(totalPay)}</td></tr></tbody></table>
+        <tr class="tot"><td class="l" style="color:#fff">TOTAL</td><td></td><td></td><td></td><td>${n2(totalDays)}</td><td>${eur.format(totalPay)}</td></tr></tbody></table>
     <div class="rep-h">Daily Log</div>
     <table class="doc"><colgroup><col style="width:64px"><col><col style="width:130px"><col style="width:140px"><col style="width:50px"><col style="width:90px"></colgroup>
       <thead><tr><th class="c">Date</th><th class="l">Name</th><th class="l">Position</th><th class="l">Department</th><th>Days</th><th>Amount</th></tr></thead>
