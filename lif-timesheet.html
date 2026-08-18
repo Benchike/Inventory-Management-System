@@ -95,6 +95,15 @@
   .modal .btn.cancel{background:var(--soft);border-color:var(--line);color:var(--text)}
   .amthint{font-size:.72rem;color:var(--muted);font-weight:600;margin-top:-4px}
 
+  .signcard{margin-bottom:18px;padding:16px}
+  .signcard h2{margin-bottom:10px}
+  .upbtn{display:inline-block;font-size:.76rem;font-weight:700;color:var(--blue-deep);cursor:pointer;border:1px dashed var(--line);border-radius:8px;padding:9px 13px}
+  .upbtn:hover{border-color:var(--blue)}
+  .upthumb{display:none;max-height:56px;background:#fff;border:1px solid var(--line);border-radius:7px;padding:4px}
+  .upthumb.show{display:block}
+  .clearsig{font-family:inherit;font-size:.72rem;font-weight:700;color:#ff6b6b;background:none;border:1px solid rgba(255,107,107,.4);border-radius:8px;padding:8px 12px;cursor:pointer;display:none}
+  .clearsig.show{display:inline-block}
+
   /* ===== printable report ===== */
   #printArea{display:none}
   .docwrap{background:#fff;color:#021431;padding:6px 2px;font-size:12.5px}
@@ -121,6 +130,12 @@
   .rep-kpi .c.dk .v{color:#00a4ff}
   .rep-h{font-size:12px;font-weight:800;color:#021431;display:flex;align-items:center;gap:8px;margin:20px 0 9px}
   .rep-h::before{content:"";width:4px;height:14px;background:#00a4ff;border-radius:3px}
+  .doc-sign{display:flex;justify-content:flex-end;margin-top:22px;padding-top:16px;border-top:1px solid #eaeef4}
+  .doc-sg{text-align:center;min-width:230px}
+  .doc-sg .slot{height:54px;display:flex;align-items:flex-end;justify-content:center}
+  .doc-sg img{max-height:54px;max-width:200px}
+  .doc-sg .ln{border-top:1.4px solid #021431;margin-top:2px;padding-top:5px;font-size:12px;font-weight:700}
+  .doc-sg .rl{font-size:10px;color:#56657a;font-weight:500}
   @media print{
     body{background:#fff!important;background-image:none!important}
     .wrap,header,.modalbg{display:none!important}
@@ -155,13 +170,28 @@
     <div class="kpi"><div class="l">Entries (filtered)</div><div class="v" id="kpiEntries">0</div></div>
     <div class="kpi"><div class="l">Team members</div><div class="v" id="kpiMembers">0</div></div>
     <div class="kpi"><div class="l">Days worked (filtered)</div><div class="v" id="kpiDays">0</div></div>
-    <div class="kpi"><div class="l">Total pay (filtered)</div><div class="v" id="kpiPay">₦0</div></div>
+    <div class="kpi"><div class="l">Total pay (filtered)</div><div class="v" id="kpiPay">€0</div></div>
   </div>
 
   <div class="rangebar">
     <div class="fld"><span class="lab">From</span><input type="date" id="repFrom"></div>
     <div class="fld"><span class="lab">To</span><input type="date" id="repTo"></div>
     <button class="ghostbtn" id="downloadReport">📄 Download period summary (PDF)</button>
+  </div>
+
+  <div class="card signcard">
+    <h2>Report sign-off</h2>
+    <div class="row2 mb">
+      <div><span class="lab">Signed by</span><input type="text" id="signName" placeholder="Full name"></div>
+      <div><span class="lab">Title</span><input type="text" id="signTitle" placeholder="Role / title"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <label class="upbtn">Upload signature<input type="file" id="signFile" accept="image/*" style="display:none"></label>
+      <img id="signThumb" class="upthumb">
+      <button class="clearsig" id="clearSig" type="button">Remove signature</button>
+      <button class="ghostbtn" id="saveSignoff" type="button">Save sign-off</button>
+    </div>
+    <div class="amthint" style="margin-top:10px">This appears on every downloaded time sheet report, for any date range.</div>
   </div>
 
   <div class="toolbar">
@@ -308,6 +338,80 @@ $("asToggle").addEventListener("change",e=>{
   localStorage.setItem("kiru_autosave_lif_timesheet",autosaveOn?"on":"off");
   setSaveStatus("saved");
 });
+
+/* ============ SIGN-OFF (report letterhead, stored in lif_report_meta) ============ */
+const META_REPORT_KEY="lif_timesheet";
+let signature="", metaSaveTimer=null, metaLoaded=false;
+function processSignature(dataURL,cb){
+  const img=new Image();
+  img.onload=()=>{
+    const cv=document.createElement("canvas"); cv.width=img.width; cv.height=img.height;
+    const ctx=cv.getContext("2d"); ctx.drawImage(img,0,0);
+    const W=cv.width,H=cv.height,id=ctx.getImageData(0,0,W,H),d=id.data;
+    let minX=W,minY=H,maxX=0,maxY=0,found=false;
+    for(let y=0;y<H;y++){for(let x=0;x<W;x++){
+      const i=(y*W+x)*4,lum=(d[i]+d[i+1]+d[i+2])/3;
+      const a=lum>205?0:Math.min(255,Math.round((205-lum)*1.7));
+      d[i]=2;d[i+1]=20;d[i+2]=49;d[i+3]=a;
+      if(a>30){found=true;if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;}
+    }}
+    ctx.putImageData(id,0,0);
+    if(!found){cb(cv.toDataURL("image/png"));return;}
+    const pad=10; minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);maxX=Math.min(W-1,maxX+pad);maxY=Math.min(H-1,maxY+pad);
+    const cw=maxX-minX+1,ch=maxY-minY+1;
+    const c2=document.createElement("canvas"); c2.width=cw; c2.height=ch;
+    c2.getContext("2d").drawImage(cv,minX,minY,cw,ch,0,0,cw,ch);
+    cb(c2.toDataURL("image/png"));
+  };
+  img.src=dataURL;
+}
+function applySignThumb(){
+  const th=$("signThumb");
+  if(signature){ th.src=signature; th.classList.add("show"); $("clearSig").classList.add("show"); }
+  else { th.classList.remove("show"); th.removeAttribute("src"); $("clearSig").classList.remove("show"); }
+}
+function metaToObj(){ return {signName:$("signName").value.trim(), signTitle:$("signTitle").value.trim(), signature}; }
+function applyMetaObj(o){
+  if(!o) return;
+  $("signName").value=o.signName||""; $("signTitle").value=o.signTitle||"";
+  signature=o.signature||""; applySignThumb();
+}
+async function loadMeta(){
+  if(!SB||!synced) return;
+  const {data,error}=await SB.from("lif_report_meta").select("data").eq("report_key",META_REPORT_KEY).maybeSingle();
+  if(error){ console.error("meta load error",error); return; }
+  if(data&&data.data) applyMetaObj(data.data);
+  metaLoaded=true;
+}
+async function saveMetaNow(){
+  if(!SB||!synced) return;
+  setSaveStatus("saving");
+  const {error}=await SB.from("lif_report_meta").upsert({report_key:META_REPORT_KEY,data:metaToObj(),updated_at:new Date().toISOString()},{onConflict:"report_key"});
+  if(error){ console.error("meta save error",error); alert("Could not save sign-off: "+error.message); return; }
+  setSaveStatus("saved");
+}
+function queueMetaSave(){
+  if(!SB||!synced||!metaLoaded) return;
+  if(!autosaveOn){ setSaveStatus("dirty"); return; }
+  clearTimeout(metaSaveTimer);
+  setSaveStatus("saving");
+  metaSaveTimer=setTimeout(saveMetaNow,700);
+}
+$("signName").addEventListener("input",queueMetaSave);
+$("signTitle").addEventListener("input",queueMetaSave);
+$("signFile").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>processSignature(r.result,out=>{ signature=out; applySignThumb(); queueMetaSave(); });
+  r.readAsDataURL(f);
+});
+$("clearSig").addEventListener("click",()=>{ signature=""; $("signFile").value=""; applySignThumb(); queueMetaSave(); });
+$("saveSignoff").addEventListener("click",async()=>{
+  if(!synced){ alert("Sign in from the main Kiru app first, then reload this page."); return; }
+  clearTimeout(metaSaveTimer);
+  await saveMetaNow();
+});
+
 function currentModalRow(){
   return {
     work_date:$("fDate").value, member_name:$("fName").value.trim(), role_title:$("fRole").value.trim(),
@@ -514,6 +618,11 @@ function timesheetReportHTML(from,to){
     <table class="doc"><colgroup><col style="width:64px"><col><col style="width:130px"><col style="width:140px"><col style="width:50px"><col style="width:90px"></colgroup>
       <thead><tr><th class="c">Date</th><th class="l">Name</th><th class="l">Position</th><th class="l">Department</th><th>Days</th><th>Amount</th></tr></thead>
       <tbody>${logRows||'<tr><td colspan="6" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No entries in this period</td></tr>'}</tbody></table>
+    <div class="doc-sign"><div class="doc-sg">
+      <div class="slot">${signature?`<img src="${signature}" alt="signature">`:''}</div>
+      <div class="ln">${esc($("signName").value.trim())||"—"}</div>
+      <div class="rl">${$("signTitle").value.trim()?esc($("signTitle").value.trim())+" · ":""}Kiru Energy Ltd</div>
+    </div></div>
     ${docFoot()}</div>`;
 }
 $("downloadReport").addEventListener("click",()=>{
@@ -549,6 +658,7 @@ async function initApp(){
   synced=true;
   currentUserEmail=(session.user&&session.user.email)||"";
   await pull();
+  await loadMeta();
   subscribeLive();
 }
 initApp();
