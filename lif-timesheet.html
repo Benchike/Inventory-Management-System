@@ -36,6 +36,17 @@
 
   #syncBanner{font-size:.78rem;font-weight:600;padding:10px 14px;border-radius:10px;border:1px solid var(--line);margin-bottom:16px;line-height:1.4;display:none}
 
+  .asbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card-bg)}
+  .asswitch{position:relative;display:inline-block;width:38px;height:22px;flex:none;cursor:pointer}
+  .asswitch input{opacity:0;width:0;height:0;position:absolute}
+  .asdot{position:absolute;inset:0;background:var(--line);border-radius:999px;transition:.15s}
+  .asdot::before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s}
+  .asswitch input:checked+.asdot{background:var(--blue)}
+  .asswitch input:checked+.asdot::before{transform:translateX(16px)}
+  .asinfo{display:flex;flex-direction:column;flex:1;min-width:0}
+  .aslabel{font-size:.8rem;font-weight:700;color:var(--text)}
+  .asstatus{font-size:.7rem;font-weight:600;color:var(--muted)}
+
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
   @media(max-width:980px){.kpis{grid-template-columns:repeat(2,1fr)}}
   .kpi{background:var(--card-bg);border:1px solid var(--line);border-radius:12px;box-shadow:var(--card-shadow);padding:13px 15px}
@@ -134,6 +145,11 @@
   </header>
 
   <div id="syncBanner"></div>
+
+  <div class="asbar">
+    <label class="asswitch"><input type="checkbox" id="asToggle" checked><span class="asdot"></span></label>
+    <div class="asinfo"><span class="aslabel">Autosave while logging a work day</span><span class="asstatus" id="saveStatus">All changes saved</span></div>
+  </div>
 
   <div class="kpis">
     <div class="kpi"><div class="l">Entries (filtered)</div><div class="v" id="kpiEntries">0</div></div>
@@ -239,8 +255,9 @@ const n2=n=>Number(n||0).toLocaleString("en-US",{maximumFractionDigits:2});
 function today(){ return new Date().toISOString().slice(0,10); }
 function fmtDate(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}); }
 function fmtCommasEl(el){const sel=el.selectionStart;const before=el.value.slice(0,sel).replace(/[^\d]/g,"").length;const digits=el.value.replace(/[^\d]/g,"");if(!digits){el.value="";return;}const f=Number(digits).toLocaleString("en-US");el.value=f;let c=0,p=0;for(;p<f.length&&c<before;p++){if(/\d/.test(f[p]))c++;}try{el.setSelectionRange(p,p);}catch(e){}}
-$("fRate").addEventListener("input",e=>{fmtCommasEl(e.target); updateAmtPreview();});
-$("fDays").addEventListener("input",updateAmtPreview);
+$("fRate").addEventListener("input",e=>{fmtCommasEl(e.target); updateAmtPreview(); queueAutosave();});
+$("fDays").addEventListener("input",()=>{updateAmtPreview(); queueAutosave();});
+["fDate","fName","fRole","fDept","fNotes"].forEach(id=>$(id).addEventListener("input",queueAutosave));
 function updateAmtPreview(){
   const amt=num("fRate")*(parseFloat($("fDays").value)||0);
   $("amtPreview").textContent=eur.format(amt);
@@ -278,6 +295,48 @@ function setSyncBanner(msg,ok){
 }
 
 let entries=[], editingId=null;
+let autosaveOn=localStorage.getItem("kiru_autosave_lif_timesheet")!=="off", saveTimer=null, isDraftRow=false;
+function setSaveStatus(state){
+  const el=$("saveStatus"); if(!el) return;
+  if(state==="saving"){ el.textContent="Saving…"; el.style.color="var(--muted)"; }
+  else if(state==="dirty"){ el.textContent="Unsaved changes"; el.style.color="#b06a12"; }
+  else { el.textContent="All changes saved"; el.style.color="var(--green)"; }
+}
+$("asToggle").checked=autosaveOn;
+$("asToggle").addEventListener("change",e=>{
+  autosaveOn=e.target.checked;
+  localStorage.setItem("kiru_autosave_lif_timesheet",autosaveOn?"on":"off");
+  setSaveStatus("saved");
+});
+function currentModalRow(){
+  return {
+    work_date:$("fDate").value, member_name:$("fName").value.trim(), role_title:$("fRole").value.trim(),
+    department:$("fDept").value.trim(), day_rate:num("fRate"), days:parseFloat($("fDays").value)||0,
+    notes:$("fNotes").value.trim()
+  };
+}
+async function autosaveNow(){
+  if(!synced) return;
+  const row=currentModalRow();
+  if(!row.member_name || !row.work_date){ setSaveStatus("dirty"); return; }
+  setSaveStatus("saving");
+  if(editingId){
+    const {error}=await SB.from("lif_timesheet_entries").update(row).eq("id",editingId);
+    if(error){ console.error("autosave error",error); return; }
+  } else {
+    row.created_by=currentUserEmail;
+    const {data,error}=await SB.from("lif_timesheet_entries").insert(row).select("id").single();
+    if(error){ console.error("autosave insert error",error); return; }
+    editingId=data.id; isDraftRow=true;
+  }
+  setSaveStatus("saved");
+}
+function queueAutosave(){
+  if(!synced || !$("modalBg").classList.contains("show")) return;
+  if(!autosaveOn){ setSaveStatus("dirty"); return; }
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(autosaveNow,700);
+}
 
 function matchesFilters(e){
   const q=$("search").value.trim().toLowerCase();
@@ -345,7 +404,9 @@ function render(){
 }
 
 function openModal(id){
+  clearTimeout(saveTimer);
   editingId=id||null;
+  isDraftRow=false;
   const e=id?entries.find(x=>x.id===id):null;
   $("modalTitle").textContent=e?"Edit work day":"Log work day";
   $("fDate").value=e?(e.work_date||""):today();
@@ -356,14 +417,23 @@ function openModal(id){
   $("fRate").value=e?Number(e.day_rate||0).toLocaleString("en-US"):"";
   $("fNotes").value=e?(e.notes||""):"";
   updateAmtPreview();
+  setSaveStatus(e?"saved":"dirty");
   $("modalDelete").style.display=(e&&isAdmin())?"block":"none";
   $("modalBg").classList.add("show");
   $("fName").focus();
 }
-function closeModal(){ $("modalBg").classList.remove("show"); editingId=null; }
-$("modalClose").addEventListener("click",closeModal);
-$("modalCancel").addEventListener("click",closeModal);
-$("modalBg").addEventListener("click",e=>{ if(e.target===$("modalBg")) closeModal(); });
+async function cancelModal(){
+  clearTimeout(saveTimer);
+  if(isDraftRow && editingId){
+    await SB.from("lif_timesheet_entries").delete().eq("id",editingId);
+  }
+  isDraftRow=false;
+  $("modalBg").classList.remove("show");
+  editingId=null;
+}
+$("modalClose").addEventListener("click",cancelModal);
+$("modalCancel").addEventListener("click",cancelModal);
+$("modalBg").addEventListener("click",e=>{ if(e.target===$("modalBg")) cancelModal(); });
 $("newEntryBtn").addEventListener("click",()=>openModal(null));
 
 $("modalSave").addEventListener("click",async()=>{
@@ -371,12 +441,9 @@ $("modalSave").addEventListener("click",async()=>{
   const name=$("fName").value.trim();
   if(!name){ alert("Team member name is required."); return; }
   if(!$("fDate").value){ alert("Date worked is required."); return; }
-  const row={
-    work_date:$("fDate").value, member_name:name, role_title:$("fRole").value.trim(),
-    department:$("fDept").value.trim(),
-    day_rate:num("fRate"), days:parseFloat($("fDays").value)||0,
-    notes:$("fNotes").value.trim()
-  };
+  clearTimeout(saveTimer);
+  setSaveStatus("saving");
+  const row=currentModalRow();
   if(editingId){
     const {error}=await SB.from("lif_timesheet_entries").update(row).eq("id",editingId);
     if(error){ alert("Could not save: "+error.message); return; }
@@ -385,14 +452,19 @@ $("modalSave").addEventListener("click",async()=>{
     const {error}=await SB.from("lif_timesheet_entries").insert(row);
     if(error){ alert("Could not log entry: "+error.message); return; }
   }
-  closeModal(); await pull();
+  isDraftRow=false;
+  setSaveStatus("saved");
+  $("modalBg").classList.remove("show"); editingId=null;
+  await pull();
 });
 $("modalDelete").addEventListener("click",async()=>{
   if(!editingId||!isAdmin()) return;
   if(!confirm("Permanently delete this entry? This cannot be undone.")) return;
   const {error}=await SB.from("lif_timesheet_entries").delete().eq("id",editingId);
   if(error){ alert("Could not delete: "+error.message); return; }
-  closeModal(); await pull();
+  isDraftRow=false;
+  $("modalBg").classList.remove("show"); editingId=null;
+  await pull();
 });
 async function deleteEntry(id){
   if(!isAdmin()) return;
