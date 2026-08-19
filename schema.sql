@@ -481,9 +481,10 @@ create table if not exists public.lif_expenses (
   id             uuid primary key default gen_random_uuid(),
   ref            text not null default '',
   expense_date   date not null default current_date,
-  category       text not null default 'Miscellaneous' check (category in ('Logistics','Marketing','Site Expenses','Fixed Assets','Utilities','Professional Fees','Miscellaneous')),
+  category       text not null default 'Logistics / Site Expense' check (category in ('Operating / Digital Services','Installation / Site Labour','Logistics / Site Expense','Fixed Asset / Field Equipment','Fixed Asset / Communication','Bank / Operating Cost','Safety / Field Equipment','Vehicle / Operating Cost','Printing / Marketing')),
   description    text not null default '',
   amount         numeric not null default 0,
+  fx_rate        numeric not null default 0,
   site           text default '',
   vendor         text default '',
   payment_method text default '',
@@ -493,6 +494,12 @@ create table if not exists public.lif_expenses (
   created_at     timestamptz default now(),
   updated_at     timestamptz default now()
 );
+
+alter table public.lif_expenses add column if not exists fx_rate numeric not null default 0;
+alter table public.lif_expenses alter column category set default 'Logistics / Site Expense';
+alter table public.lif_expenses drop constraint if exists lif_expenses_category_check;
+alter table public.lif_expenses add constraint lif_expenses_category_check
+  check (category in ('Operating / Digital Services','Installation / Site Labour','Logistics / Site Expense','Fixed Asset / Field Equipment','Fixed Asset / Communication','Bank / Operating Cost','Safety / Field Equipment','Vehicle / Operating Cost','Printing / Marketing'));
 
 create index if not exists lif_expenses_date_idx on public.lif_expenses (expense_date desc);
 

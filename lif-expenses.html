@@ -33,6 +33,7 @@
   input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   textarea{resize:vertical}
   .mb{margin-bottom:9px}.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .amthint{font-size:.72rem;color:var(--muted);font-weight:600;margin-top:-4px}
 
   #syncBanner{font-size:.78rem;font-weight:600;padding:10px 14px;border-radius:10px;border:1px solid var(--line);margin-bottom:16px;line-height:1.4;display:none}
 
@@ -55,7 +56,8 @@
   .ghostbtn:hover{border-color:var(--blue)}
 
   .card{background:var(--card-bg);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--card-shadow)}
-  .logtbwrap{max-height:60vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px}
+  .logtbwrap{max-height:60vh;overflow-y:auto;overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+  .eursub{display:block;font-size:.68rem;font-weight:700;color:var(--blue-deep);margin-top:2px}
   .logtable{width:100%;border-collapse:collapse;font-size:.82rem}
   .logtable thead th{position:sticky;top:0;background:var(--card-bg);text-align:left;font-size:.64rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);z-index:1}
   .logtable tbody td{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--text);vertical-align:middle}
@@ -159,8 +161,10 @@
     <input type="text" id="search" class="search" placeholder="Search by description, vendor or reference…">
     <select id="filterCategory">
       <option value="">All categories</option>
-      <option>Logistics</option><option>Marketing</option><option>Site Expenses</option>
-      <option>Fixed Assets</option><option>Utilities</option><option>Professional Fees</option><option>Miscellaneous</option>
+      <option>Operating / Digital Services</option><option>Installation / Site Labour</option>
+      <option>Logistics / Site Expense</option><option>Fixed Asset / Field Equipment</option>
+      <option>Fixed Asset / Communication</option><option>Bank / Operating Cost</option>
+      <option>Safety / Field Equipment</option><option>Vehicle / Operating Cost</option><option>Printing / Marketing</option>
     </select>
     <select id="sortBy">
       <option value="">Newest first</option>
@@ -174,7 +178,7 @@
   <div class="card">
     <div class="logtbwrap">
       <table class="logtable">
-        <thead><tr><th>Date</th><th>Ref</th><th>Category</th><th>Description</th><th>Vendor</th><th>Amount</th><th>Receipt</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Ref</th><th>Category</th><th>Description</th><th>Site</th><th>Amount</th><th>FX Rate</th><th>Receipt</th><th></th></tr></thead>
         <tbody id="logTbody"></tbody>
       </table>
     </div>
@@ -189,21 +193,25 @@
       <div class="row2">
         <div><span class="lab">Date</span><input type="date" id="fDate"></div>
         <div><span class="lab">Category</span><select id="fCategory">
-          <option>Logistics</option><option>Marketing</option><option>Site Expenses</option>
-          <option>Fixed Assets</option><option>Utilities</option><option>Professional Fees</option><option>Miscellaneous</option>
+          <option>Operating / Digital Services</option><option>Installation / Site Labour</option>
+          <option>Logistics / Site Expense</option><option>Fixed Asset / Field Equipment</option>
+          <option>Fixed Asset / Communication</option><option>Bank / Operating Cost</option>
+          <option>Safety / Field Equipment</option><option>Vehicle / Operating Cost</option><option>Printing / Marketing</option>
         </select></div>
       </div>
       <div><span class="lab">Description</span><input type="text" id="fDesc" placeholder="What was this expense for?"></div>
       <div class="row2">
         <div><span class="lab">Amount (₦)</span><input type="text" inputmode="numeric" id="fAmount"></div>
+        <div><span class="lab">FX rate (₦/€) <small>on this date</small></span><input type="number" id="fFx" step="0.01"></div>
+      </div>
+      <div class="amthint">≈ <b id="eurPreview">€0</b> at this rate</div>
+      <div class="row2">
         <div><span class="lab">Payment method <small>(optional)</small></span><select id="fMethod">
           <option value="">— select —</option><option>Cash</option><option>Bank Transfer</option><option>POS / Card</option><option>Other</option>
         </select></div>
-      </div>
-      <div class="row2">
         <div><span class="lab">Site / location <small>(optional)</small></span><input type="text" id="fSite"></div>
-        <div><span class="lab">Vendor / paid to <small>(optional)</small></span><input type="text" id="fVendor"></div>
       </div>
+      <div><span class="lab">Vendor / paid to <small>(optional)</small></span><input type="text" id="fVendor"></div>
       <div><span class="lab">Notes <small>(optional)</small></span><textarea id="fNotes" style="min-height:60px"></textarea></div>
       <div><span class="lab">Receipt <small>(optional — image or PDF)</small></span>
         <label class="upbtn">Upload receipt<input type="file" id="fReceiptFile" accept="image/*,application/pdf" style="display:none"></label>
@@ -248,12 +256,23 @@ document.getElementById("themeToggle").addEventListener("click",()=>applyTheme(r
 const $=id=>document.getElementById(id);
 const esc=s=>(s||"").toString().replace(/</g,"&lt;").replace(/"/g,"&quot;");
 const ngn=new Intl.NumberFormat("en-NG",{style:"currency",currency:"NGN",maximumFractionDigits:0});
+const eur=new Intl.NumberFormat("en-IE",{style:"currency",currency:"EUR",maximumFractionDigits:2});
 const num=id=>parseFloat(($(id).value||"").toString().replace(/,/g,""))||0;
 const n2=n=>Number(n||0).toLocaleString("en-US",{maximumFractionDigits:2});
+function expEur(e){ return e.fx_rate?(Number(e.amount)||0)/Number(e.fx_rate):null; }
 function today(){ return new Date().toISOString().slice(0,10); }
 function fmtDate(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}); }
 function fmtCommasEl(el){const sel=el.selectionStart;const before=el.value.slice(0,sel).replace(/[^\d]/g,"").length;const digits=el.value.replace(/[^\d]/g,"");if(!digits){el.value="";return;}const f=Number(digits).toLocaleString("en-US");el.value=f;let c=0,p=0;for(;p<f.length&&c<before;p++){if(/\d/.test(f[p]))c++;}try{el.setSelectionRange(p,p);}catch(e){}}
-$("fAmount").addEventListener("input",e=>fmtCommasEl(e.target));
+$("fAmount").addEventListener("input",e=>{fmtCommasEl(e.target); updateEurPreview();});
+$("fFx").addEventListener("input",updateEurPreview);
+function updateEurPreview(){
+  const fx=num("fFx");
+  $("eurPreview").textContent=fx?eur.format(num("fAmount")/fx):"€0";
+}
+function latestFxRate(){
+  const withFx=expenses.filter(e=>e.fx_rate).slice().sort((a,b)=>(b.expense_date||"").localeCompare(a.expense_date||""));
+  return withFx.length?withFx[0].fx_rate:1572.35;
+}
 function resizeImage(dataURL,maxW,cb){
   const img=new Image();
   img.onload=()=>{
@@ -324,14 +343,15 @@ function render(){
   const filtered=sortExpenses(expenses.filter(matchesFilters));
   const cats=new Set(filtered.map(e=>e.category));
   const total=filtered.reduce((s,e)=>s+(Number(e.amount)||0),0);
+  const totalEur=filtered.reduce((s,e)=>s+(expEur(e)||0),0);
   $("kpiEntries").textContent=filtered.length;
   $("kpiCats").textContent=cats.size;
   $("kpiAvg").textContent=ngn.format(filtered.length?total/filtered.length:0);
-  $("kpiTotal").textContent=ngn.format(total);
+  $("kpiTotal").innerHTML=ngn.format(total)+`<span class="eursub">${eur.format(totalEur)}</span>`;
 
   const tb=$("logTbody");
-  if(!synced){ tb.innerHTML='<tr><td colspan="8" class="histempty">Sign in from the main Kiru app to view expenses.</td></tr>'; return; }
-  if(!filtered.length){ tb.innerHTML='<tr><td colspan="8" class="histempty">No expenses match.</td></tr>'; return; }
+  if(!synced){ tb.innerHTML='<tr><td colspan="9" class="histempty">Sign in from the main Kiru app to view expenses.</td></tr>'; return; }
+  if(!filtered.length){ tb.innerHTML='<tr><td colspan="9" class="histempty">No expenses match.</td></tr>'; return; }
   tb.innerHTML=filtered.map(e=>`
     <tr>
       <td>${fmtDate(e.expense_date)||'—'}</td>
@@ -339,7 +359,8 @@ function render(){
       <td><span class="catpill">${esc(e.category)}</span></td>
       <td>${esc(e.description)}${e.vendor?`<div style="font-size:.66rem;color:var(--muted);font-weight:600">${esc(e.vendor)}</div>`:''}</td>
       <td>${esc(e.site)||'—'}</td>
-      <td class="amt">${ngn.format(e.amount||0)}</td>
+      <td class="amt">${ngn.format(e.amount||0)}${e.fx_rate?`<span class="eursub">${eur.format(expEur(e))}</span>`:''}</td>
+      <td>${e.fx_rate?n2(e.fx_rate):'—'}</td>
       <td>${e.receipt?`<a href="${e.receipt}" target="_blank" rel="noopener">View</a>`:'—'}</td>
       <td><div class="rowactions">
         <button class="abtn" data-act="edit" data-id="${e.id}">Edit</button>
@@ -367,14 +388,16 @@ function openModal(id){
   $("refRow").style.display=e?"block":"none";
   $("refDisplay").textContent=e?e.ref:"";
   $("fDate").value=e?(e.expense_date||""):today();
-  $("fCategory").value=e?e.category:"Site Expenses";
+  $("fCategory").value=e?e.category:"Logistics / Site Expense";
   $("fDesc").value=e?e.description:"";
   $("fAmount").value=e?Number(e.amount||0).toLocaleString("en-US"):"";
+  $("fFx").value=e?(e.fx_rate||""):latestFxRate();
   $("fMethod").value=e?(e.payment_method||""):"";
   $("fSite").value=e?(e.site||""):"";
   $("fVendor").value=e?(e.vendor||""):"";
   $("fNotes").value=e?(e.notes||""):"";
   $("fReceiptFile").value="";
+  updateEurPreview();
   setReceiptPreview(e?(e.receipt||""):"", e&&e.receipt?e.receipt.startsWith("data:application/pdf"):false);
   $("modalDelete").style.display=(e&&isAdmin())?"block":"none";
   $("modalBg").classList.add("show");
@@ -402,7 +425,7 @@ $("modalSave").addEventListener("click",async()=>{
   if(!$("fDate").value){ alert("Date is required."); return; }
   const row={
     expense_date:$("fDate").value, category:$("fCategory").value, description:desc,
-    amount:num("fAmount"), site:$("fSite").value.trim(), vendor:$("fVendor").value.trim(),
+    amount:num("fAmount"), fx_rate:num("fFx"), site:$("fSite").value.trim(), vendor:$("fVendor").value.trim(),
     payment_method:$("fMethod").value, receipt:currentReceipt||"", notes:$("fNotes").value.trim()
   };
   if(editingId){
@@ -437,13 +460,18 @@ async function deleteExpense(id){
 
 function expenseReportHTML(from,to){
   const inRange=expenses.filter(e=>e.expense_date>=from && e.expense_date<=to);
-  const byCat={};
-  inRange.forEach(e=>{ byCat[e.category]=(byCat[e.category]||0)+(Number(e.amount)||0); });
+  const byCat={}, byCatEur={};
+  inRange.forEach(e=>{
+    byCat[e.category]=(byCat[e.category]||0)+(Number(e.amount)||0);
+    byCatEur[e.category]=(byCatEur[e.category]||0)+(expEur(e)||0);
+  });
   const total=inRange.reduce((s,e)=>s+(Number(e.amount)||0),0);
+  const totalEur=inRange.reduce((s,e)=>s+(expEur(e)||0),0);
   const catRows=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>
-    `<tr><td class="l">${esc(cat)}</td><td>${ngn.format(amt)}</td><td>${total?n2(amt/total*100):'0'}%</td></tr>`).join("");
+    `<tr><td class="l">${esc(cat)}</td><td>${ngn.format(amt)}<span class="eursub">${eur.format(byCatEur[cat]||0)}</span></td><td>${total?n2(amt/total*100):'0'}%</td></tr>`).join("");
   const logRows=inRange.slice().sort((a,b)=>(a.expense_date||"").localeCompare(b.expense_date||"")).map(e=>
-    `<tr><td class="c">${fmtDate(e.expense_date)}</td><td class="l">${esc(e.ref)}</td><td class="l">${esc(e.category)}</td><td class="l">${esc(e.description)}</td><td class="l">${esc(e.vendor)||'—'}</td><td>${ngn.format(e.amount||0)}</td></tr>`).join("");
+    `<tr><td class="c">${fmtDate(e.expense_date)}</td><td class="l">${esc(e.ref)}</td><td class="l">${esc(e.category)}</td><td class="l">${esc(e.description)}</td><td class="l">${esc(e.vendor)||'—'}</td>
+      <td>${ngn.format(e.amount||0)}${e.fx_rate?`<span class="eursub">${eur.format(expEur(e))}</span>`:''}</td><td>${e.fx_rate?n2(e.fx_rate):'—'}</td></tr>`).join("");
 
   return `<div class="docwrap">
     ${docHead("EXPENSE REPORT",`<b>Period:</b> ${fmtDate(from)} – ${fmtDate(to)}<br><b>Generated:</b> ${fmtDate(today())}`)}
@@ -451,17 +479,17 @@ function expenseReportHTML(from,to){
       <div class="c"><div class="l">Entries</div><div class="v">${inRange.length}</div></div>
       <div class="c"><div class="l">Categories</div><div class="v">${Object.keys(byCat).length}</div></div>
       <div class="c"><div class="l">Average per entry</div><div class="v">${ngn.format(inRange.length?total/inRange.length:0)}</div></div>
-      <div class="c dk"><div class="l">Total expenses</div><div class="v">${ngn.format(total)}</div></div>
+      <div class="c dk"><div class="l">Total expenses</div><div class="v">${ngn.format(total)}</div><div class="x" style="color:#8aa9c4;font-size:10px;margin-top:2px">${eur.format(totalEur)}</div></div>
     </div>
     <div class="rep-h">Category Breakdown</div>
-    <table class="doc"><colgroup><col><col style="width:120px"><col style="width:70px"></colgroup>
+    <table class="doc"><colgroup><col><col style="width:130px"><col style="width:70px"></colgroup>
       <thead><tr><th class="l">Category</th><th>Amount</th><th>% of total</th></tr></thead>
       <tbody>${catRows||'<tr><td colspan="3" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No expenses in this period</td></tr>'}
         <tr class="tot"><td class="l" style="color:#fff">TOTAL</td><td>${ngn.format(total)}</td><td>100%</td></tr></tbody></table>
     <div class="rep-h">Expense Log</div>
-    <table class="doc"><colgroup><col style="width:64px"><col style="width:90px"><col style="width:110px"><col><col style="width:110px"><col style="width:90px"></colgroup>
-      <thead><tr><th class="c">Date</th><th class="l">Ref</th><th class="l">Category</th><th class="l">Description</th><th class="l">Vendor</th><th>Amount</th></tr></thead>
-      <tbody>${logRows||'<tr><td colspan="6" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No expenses in this period</td></tr>'}</tbody></table>
+    <table class="doc"><colgroup><col style="width:64px"><col style="width:90px"><col style="width:110px"><col><col style="width:100px"><col style="width:100px"><col style="width:70px"></colgroup>
+      <thead><tr><th class="c">Date</th><th class="l">Ref</th><th class="l">Category</th><th class="l">Description</th><th class="l">Vendor</th><th>Amount</th><th>FX Rate</th></tr></thead>
+      <tbody>${logRows||'<tr><td colspan="7" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No expenses in this period</td></tr>'}</tbody></table>
     ${docFoot()}</div>`;
 }
 $("downloadReport").addEventListener("click",()=>{
