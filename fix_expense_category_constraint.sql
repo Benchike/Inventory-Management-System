@@ -9,7 +9,7 @@ begin
 end $$;
 
 alter table public.lif_expenses add constraint lif_expenses_category_check
-  check (category in ('Operating / Digital Services','Installation / Site Labour','Logistics / Site Expense','Fixed Asset / Field Equipment','Fixed Asset / Communication','Bank / Operating Cost','Safety / Field Equipment','Vehicle / Operating Cost','Printing / Marketing'));
+  check (category in ('Operating / Digital Services','Installation / Site Labour','Logistics / Site Expense','Fixed Asset / Field Equipment','Fixed Asset / Communication','Bank / Operating Cost','Safety / Field Equipment','Vehicle / Operating Cost','Printing / Marketing','Travels and Transportation'));
 
 select conname, pg_get_constraintdef(oid) as definition
 from pg_constraint
