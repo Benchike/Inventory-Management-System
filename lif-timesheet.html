@@ -593,10 +593,18 @@ function timesheetReportHTML(from,to){
   const totalPay=rows.reduce((s,r)=>s+r.days*(r.day_rate||0),0);
   const members=new Set(rows.map(r=>r.member_name));
 
+  const DEPT_ORDER=["Overall Project Management","Engineering and Operations","Sales and Marketing","Customer Support","Finance"];
+  const deptRank=d=>{ const i=DEPT_ORDER.indexOf(d); return i===-1?DEPT_ORDER.length:i; };
   const byMember={};
   rows.forEach(r=>{ (byMember[r.member_name]=byMember[r.member_name]||[]).push(r); });
-  const summaryBody=Object.keys(byMember).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"})).map(name=>{
-    const roleRows=byMember[name];
+  const memberNames=Object.keys(byMember).sort((a,b)=>{
+    const ra=Math.min(...byMember[a].map(r=>deptRank(r.department)));
+    const rb=Math.min(...byMember[b].map(r=>deptRank(r.department)));
+    if(ra!==rb) return ra-rb;
+    return a.localeCompare(b,undefined,{sensitivity:"base"});
+  });
+  const summaryBody=memberNames.map(name=>{
+    const roleRows=byMember[name].slice().sort((a,b)=>deptRank(a.department)-deptRank(b.department));
     return roleRows.map((r,i)=>{
       const nameCell=i===0?`<td class="l" rowspan="${roleRows.length}" style="vertical-align:middle">${esc(name)}</td>`:'';
       return `<tr>${nameCell}<td class="l">${esc(r.role_title)||'—'}</td><td class="l">${esc(r.department)||'—'}</td>
