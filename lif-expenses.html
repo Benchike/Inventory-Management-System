@@ -470,7 +470,7 @@ function expenseReportHTML(from,to){
   const catRows=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>
     `<tr><td class="l">${esc(cat)}</td><td>${ngn.format(amt)}<span class="eursub">${eur.format(byCatEur[cat]||0)}</span></td><td>${total?n2(amt/total*100):'0'}%</td></tr>`).join("");
   const logRows=inRange.slice().sort((a,b)=>(a.expense_date||"").localeCompare(b.expense_date||"")).map(e=>
-    `<tr><td class="c">${fmtDate(e.expense_date)}</td><td class="l">${esc(e.ref)}</td><td class="l">${esc(e.category)}</td><td class="l">${esc(e.description)}</td><td class="l">${esc(e.vendor)||'—'}</td>
+    `<tr><td class="c">${fmtDate(e.expense_date)}</td><td class="l">${esc(e.ref)}</td><td class="l">${esc(e.category)}</td><td class="l">${esc(e.description)}</td>
       <td>${ngn.format(e.amount||0)}${e.fx_rate?`<span class="eursub">${eur.format(expEur(e))}</span>`:''}</td><td>${e.fx_rate?n2(e.fx_rate):'—'}</td></tr>`).join("");
 
   return `<div class="docwrap">
@@ -487,9 +487,9 @@ function expenseReportHTML(from,to){
       <tbody>${catRows||'<tr><td colspan="3" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No expenses in this period</td></tr>'}
         <tr class="tot"><td class="l" style="color:#fff">TOTAL</td><td>${ngn.format(total)}</td><td>100%</td></tr></tbody></table>
     <div class="rep-h">Expense Log</div>
-    <table class="doc"><colgroup><col style="width:64px"><col style="width:90px"><col style="width:110px"><col><col style="width:100px"><col style="width:100px"><col style="width:70px"></colgroup>
-      <thead><tr><th class="c">Date</th><th class="l">Ref</th><th class="l">Category</th><th class="l">Description</th><th class="l">Vendor</th><th>Amount</th><th>FX Rate</th></tr></thead>
-      <tbody>${logRows||'<tr><td colspan="7" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No expenses in this period</td></tr>'}</tbody></table>
+    <table class="doc"><colgroup><col style="width:64px"><col style="width:90px"><col style="width:120px"><col><col style="width:110px"><col style="width:80px"></colgroup>
+      <thead><tr><th class="c">Date</th><th class="l">Ref</th><th class="l">Category</th><th class="l">Description</th><th>Amount</th><th>FX Rate</th></tr></thead>
+      <tbody>${logRows||'<tr><td colspan="6" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No expenses in this period</td></tr>'}</tbody></table>
     ${docFoot()}</div>`;
 }
 $("downloadReport").addEventListener("click",()=>{
