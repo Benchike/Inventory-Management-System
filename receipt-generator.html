@@ -8,7 +8,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+window.KIRU_CONFIG = {
+  SUPABASE_URL: "https://mfthkjtoggofjjmwyekt.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_la6NVRk4WPj5e4FDNB_rMQ_ArsAf3jV",
+  ADMIN_EMAIL: "benokpala@ourkiru.com"
+};
+</script>
 <style>
   :root{
     --blue:#00a4ff; --blue-deep:#0086d4; --navy:#021431; --green:#1faa6b; --radius:14px;
@@ -138,6 +145,40 @@
   .pv-contact{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
   .pv-contact .ci{display:flex;align-items:center;gap:9px;font-size:12px;color:#021431;font-weight:500;line-height:1.35}
   .pv-contact .ci svg{width:21px;height:21px;color:#00a4ff;flex:none}
+
+  .viewtabs{display:flex;gap:8px;margin-bottom:18px}
+  .vtab{font-family:inherit;font-size:.82rem;font-weight:700;color:var(--muted);background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:9px 18px;cursor:pointer;transition:.16s}
+  .vtab:hover{border-color:var(--blue);color:var(--blue-deep)}
+  .vtab.on{background:var(--blue);border-color:var(--blue);color:#04121f}
+  #syncBanner{font-size:.72rem;font-weight:600;padding:8px 10px;border-radius:8px;border:1px solid var(--line);margin-bottom:14px;line-height:1.4;display:none}
+  .offscreen{position:fixed!important;left:-99999px!important;top:0!important}
+  .histtbwrap{max-height:60vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px}
+  .histtable{width:100%;border-collapse:collapse;font-size:.82rem}
+  .histtable thead th{position:sticky;top:0;background:var(--card-bg);text-align:left;font-size:.64rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);z-index:1}
+  .histtable tbody td{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--text);vertical-align:middle}
+  .histtable tbody tr:last-child td{border-bottom:none}
+  .histtable tbody tr:hover{background:var(--soft)}
+  .histtable td.amt{font-weight:700;color:var(--blue-deep);white-space:nowrap}
+  .histtable .rowactions{display:flex;gap:6px;justify-content:flex-end}
+  .histtable .abtn{font-family:inherit;font-size:.68rem;font-weight:700;color:var(--blue-deep);background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:6px 10px;cursor:pointer;white-space:nowrap;transition:.15s}
+  .histtable .abtn:hover{border-color:var(--blue)}
+  .histtable .abtn.danger{color:#ff6b6b}
+  .histtable .abtn.danger:hover{border-color:#ff6b6b;background:rgba(255,107,107,.1)}
+  .histempty{font-size:.82rem;color:var(--muted);text-align:center;padding:30px}
+  .hint{font-size:.7rem;color:var(--muted);margin-top:10px;line-height:1.45;text-align:center}
+  .btn.draft{background:var(--card-bg);color:var(--text);border-color:var(--line)}.btn.draft:hover{border-color:var(--blue);color:var(--blue-deep)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  @page{size:A4;margin:10mm}
+  @media print{
+    body{background:#fff!important;background-image:none!important}
+    .wrap{max-width:none;padding:0;margin:0}
+    header,.viewtabs,.controls,#syncBanner,#historyView{display:none!important}
+    .layout{display:block!important}
+    .paperwrap{display:block!important;gap:0}
+    .paper{width:100%!important;max-width:none;border:none;border-radius:0;box-shadow:none}
+    table.items th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
 </style>
 </head>
 <body>
@@ -157,9 +198,16 @@
     </div>
   </header>
 
-  <div class="layout">
+  <div class="viewtabs" id="viewTabs">
+    <button class="vtab on" data-view="editor">Editor</button>
+    <button class="vtab" data-view="history">History</button>
+  </div>
+
+  <div class="layout" id="editorView">
     <div class="card controls">
       <div class="sec">
+        <div id="syncBanner"></div>
+        <button class="addbtn" id="newRcBtn" style="margin-bottom:14px">+ New receipt</button>
         <h2>Receipt details</h2>
         <div class="mb"><span class="lab">Receipt number</span>
           <div class="invno"><input type="text" id="rcNo"><button class="minibtn" id="newNo">New</button></div></div>
@@ -193,9 +241,13 @@
         <div><span class="lab">Account number</span><input type="text" id="acctNo" value="127429081"></div>
       </div>
 
-      <div class="exports">
-        <button class="btn pdf" id="dlPdf">Download PDF</button>
-        <button class="btn png" id="dlPng">Download PNG</button>
+      <div class="exports" style="flex-direction:column">
+        <button class="btn draft" id="saveRc" style="width:100%;margin-bottom:10px">Save receipt</button>
+        <div style="display:flex;gap:10px;width:100%">
+          <button class="btn pdf" id="dlPdf">Download PDF</button>
+          <button class="btn png" id="dlPng">Download PNG</button>
+        </div>
+        <div class="hint">PDF opens your browser's print dialog — choose <b>Save as PDF</b>. Text stays selectable and the file stays small.</div>
       </div>
     </div>
 
@@ -265,6 +317,22 @@
       </div>
     </div>
   </div>
+
+  <div id="historyView" style="display:none">
+    <div class="card" style="padding:20px 22px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+        <h2 style="margin-bottom:0">All receipts</h2>
+        <button class="addbtn" id="newRcBtn2" style="width:auto;margin-top:0;padding:9px 16px">+ New receipt</button>
+      </div>
+      <input type="text" id="histSearch" placeholder="Search by customer, receipt no., or date…" style="margin-bottom:16px">
+      <div class="histtbwrap">
+        <table class="histtable">
+          <thead><tr><th>Receipt No.</th><th>Received From</th><th>Date</th><th>Amount Received</th><th>Balance</th><th></th></tr></thead>
+          <tbody id="histTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -292,7 +360,9 @@ function genNo(){
   return "KIRU-RCT-"+ymd+"-"+String(Date.now()%10000).padStart(4,"0");
 }
 function fmtDate(s){ if(!s)return""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}); }
+const esc=s=>(s||"").toString().replace(/</g,"&lt;").replace(/"/g,"&quot;");
 
+let currentTotal=0;
 let items=[
   {desc:"Solar inverter 3.5kVA",qty:1,price:250000},
   {desc:"Tubular battery 220Ah",qty:2,price:180000},
@@ -314,9 +384,9 @@ function renderItems(){
     if(k==="price"){fmtCommasEl(e.target); items[i][k]=parseFloat(e.target.value.replace(/,/g,""))||0;}
     else if(k==="qty"){items[i][k]=e.target.value;}
     else items[i][k]=e.target.value;
-    calc();
+    calc(); queueAutosave();
   }));
-  c.querySelectorAll(".delbtn").forEach(b=>b.addEventListener("click",()=>{items.splice(+b.dataset.del,1);renderItems();calc();}));
+  c.querySelectorAll(".delbtn").forEach(b=>b.addEventListener("click",()=>{items.splice(+b.dataset.del,1);renderItems();calc();queueAutosave();}));
 }
 
 function calc(){
@@ -335,6 +405,7 @@ function calc(){
   });
   if(!body) body='<tr><td style="color:#b8c2d0;font-style:italic">No items added yet</td><td></td><td></td><td></td></tr>';
   $("pv_items").innerHTML=body;
+  currentTotal=total;
 
   // amount received: default to total unless user edited
   if(!paidTouched){ $("amtPaid").value = total ? Number(total).toLocaleString("en-US") : ""; }
@@ -361,25 +432,201 @@ function calc(){
   } else { $("pv_balrow").style.display="none"; $("pv_paidtag").textContent="PAID"; $("pv_paidtag").style.background="#1faa6b"; }
 }
 
-$("rcNo").value=genNo();
-$("rcDate").value=new Date().toISOString().slice(0,10);
-$("newNo").addEventListener("click",()=>{$("rcNo").value=genNo();calc();});
-["rcNo","rcDate","clientName","clientAddr","payMethod","payRef","bankName","acctName","acctNo"].forEach(id=>$(id).addEventListener("input",calc));
-$("amtPaid").addEventListener("input",e=>{paidTouched=true; fmtCommasEl(e.target); calc();});
+/* ============ SUPABASE DATA LAYER ============ */
+let SB=null, synced=false, saveTimer=null, currentUserEmail="", curId=null;
+function isAdmin(){return currentUserEmail && currentUserEmail.toLowerCase()===((window.KIRU_CONFIG&&window.KIRU_CONFIG.ADMIN_EMAIL)||"").toLowerCase();}
+function cfgOK(){const c=window.KIRU_CONFIG||{};return c.SUPABASE_URL&&c.SUPABASE_ANON_KEY&&!/YOUR-/.test(c.SUPABASE_URL+c.SUPABASE_ANON_KEY);}
+function setSyncBanner(msg,ok){
+  const b=$("syncBanner"); if(!b)return;
+  b.textContent=msg; b.style.display=msg?"block":"none";
+  b.style.background=ok?"var(--tag-bg)":"rgba(224,138,30,.14)";
+  b.style.color=ok?"var(--blue-deep)":"#b06a12";
+  b.style.border="1px solid "+(ok?"rgba(0,164,255,.35)":"rgba(224,138,30,.4)");
+}
+function rowToReceipt(r){
+  return {_id:r.id, rcNo:r.rc_no||"", rcDate:r.rc_date||"",
+    clientName:r.client_name||"", clientAddr:r.client_addr||"",
+    items: Array.isArray(r.items)?r.items:[],
+    payMethod:r.pay_method||"Bank Transfer", payRef:r.pay_ref||"", amountPaid:r.amount_paid||0,
+    bankName:r.bank_name||"Wema Bank", acctName:r.account_name||"Kiru Energy Ltd", acctNo:r.account_number||"127429081"};
+}
+function formToRow(){
+  const paid=parseFloat((val("amtPaid")||"").replace(/,/g,""))||0;
+  return {rc_no:val("rcNo"), rc_date:val("rcDate")||null,
+    client_name:val("clientName"), client_addr:val("clientAddr"),
+    items:items, total_amt:currentTotal, pay_method:val("payMethod"), pay_ref:val("payRef"), amount_paid:paid,
+    bank_name:val("bankName"), account_name:val("acctName"), account_number:val("acctNo")};
+}
+function loadReceiptIntoForm(rec){
+  curId=rec._id;
+  $("rcNo").value=rec.rcNo; $("rcDate").value=rec.rcDate;
+  $("clientName").value=rec.clientName; $("clientAddr").value=rec.clientAddr;
+  items = rec.items && rec.items.length ? rec.items.map(x=>({desc:x.desc||"",qty:(x.qty!==undefined?x.qty:1),price:x.price||0})) : [];
+  $("payMethod").value=rec.payMethod; $("payRef").value=rec.payRef;
+  $("bankName").value=rec.bankName; $("acctName").value=rec.acctName; $("acctNo").value=rec.acctNo;
+  paidTouched=true; $("amtPaid").value = rec.amountPaid ? Number(rec.amountPaid).toLocaleString("en-US") : "";
+  renderItems(); calc();
+}
+async function saveReceipt(){
+  if(!synced) return;
+  const row=formToRow();
+  if(curId){
+    const {error}=await SB.from("receipts").update(row).eq("id",curId);
+    if(error){ console.error("save error",error); alert("Could not save receipt: "+error.message); return; }
+  } else {
+    const {data,error}=await SB.from("receipts").insert(row).select("id").single();
+    if(error){ console.error("insert error",error); alert("Could not save receipt: "+error.message); return; }
+    curId=data.id;
+  }
+  await loadHistory();
+}
+function queueAutosave(){
+  if(!synced || !curId) return;
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(saveReceipt,700);
+}
+let historyRows=[];
+async function loadHistory(){
+  if(!synced) return;
+  const {data,error}=await SB.from("receipts").select("id,rc_no,client_name,total_amt,amount_paid,rc_date,created_at").order("created_at",{ascending:false}).limit(500);
+  if(error){ console.error("history error",error); return; }
+  historyRows=data||[];
+  applyHistSearch();
+}
+function matchesSearch(r,q){
+  const hay=[r.rc_no, r.client_name, fmtDate(r.rc_date), r.rc_date].filter(Boolean).join(" ").toLowerCase();
+  return hay.includes(q);
+}
+function applyHistSearch(){
+  const q=($("histSearch")?$("histSearch").value:"").trim().toLowerCase();
+  renderHistTable(q ? historyRows.filter(r=>matchesSearch(r,q)) : historyRows);
+}
+function renderHistTable(rows){
+  const tb=$("histTbody");
+  if(!synced){ tb.innerHTML='<tr><td colspan="6" class="histempty">Sign in from the main Kiru app to view receipt history.</td></tr>'; return; }
+  if(!rows.length){ tb.innerHTML='<tr><td colspan="6" class="histempty">No receipts match</td></tr>'; return; }
+  tb.innerHTML=rows.map(r=>{
+    const bal=(r.total_amt||0)-(r.amount_paid||0);
+    return `<tr>
+      <td><b>${esc(r.rc_no)}</b></td>
+      <td>${esc(r.client_name)||'—'}</td>
+      <td>${fmtDate(r.rc_date)||'—'}</td>
+      <td class="amt">${ngn.format(r.amount_paid||0)}</td>
+      <td class="amt">${bal>0.5?ngn.format(bal):'—'}</td>
+      <td><div class="rowactions">
+        <button class="abtn" data-act="open" data-id="${r.id}">Open</button>
+        <button class="abtn" data-act="regen" data-id="${r.id}">Regenerate</button>
+        <button class="abtn" data-act="pdf" data-id="${r.id}">PDF</button>
+        <button class="abtn" data-act="png" data-id="${r.id}">PNG</button>
+        ${isAdmin()?`<button class="abtn danger" data-act="delete" data-id="${r.id}" data-no="${esc(r.rc_no)}">Delete</button>`:''}
+      </div></td>
+    </tr>`;
+  }).join("");
+  tb.querySelectorAll(".abtn").forEach(b=>b.addEventListener("click",async()=>{
+    const id=b.dataset.id, act=b.dataset.act;
+    if(act==="open"){ await openReceipt(id); setView("editor"); }
+    else if(act==="regen"){ await regenerateReceipt(id); }
+    else if(act==="pdf"){ await openReceipt(id); downloadPdf(); }
+    else if(act==="png"){ await openReceipt(id); await downloadPng(); }
+    else if(act==="delete"){ await deleteReceipt(id, b.dataset.no); }
+  }));
+}
+async function regenerateReceipt(id){
+  if(!synced) return;
+  const {data,error}=await SB.from("receipts").select("*").eq("id",id).single();
+  if(error){ console.error("regenerate error",error); alert("Could not load receipt: "+error.message); return; }
+  const rec=rowToReceipt(data);
+  rec._id=null;
+  rec.rcNo = await genNoRemote();
+  rec.rcDate = new Date().toISOString().slice(0,10);
+  loadReceiptIntoForm(rec);
+  curId=null;
+  setView("editor");
+}
+async function deleteReceipt(id, rcNoLabel){
+  if(!isAdmin()) return;
+  if(!confirm("Permanently delete receipt "+rcNoLabel+"? This cannot be undone.")) return;
+  const {error}=await SB.from("receipts").delete().eq("id",id);
+  if(error){ console.error("delete error",error); alert("Could not delete receipt: "+error.message); return; }
+  if(id===curId){ await newReceipt(); }
+  await loadHistory();
+}
+async function openReceipt(id){
+  if(!synced) return;
+  const {data,error}=await SB.from("receipts").select("*").eq("id",id).single();
+  if(error){ console.error("open error",error); return; }
+  loadReceiptIntoForm(rowToReceipt(data));
+}
+async function newReceipt(){
+  curId=null;
+  $("rcNo").value = synced ? await genNoRemote() : genNo();
+  $("rcDate").value=new Date().toISOString().slice(0,10);
+  $("clientName").value="Customer name";
+  $("clientAddr").value="Address, City";
+  items=[
+    {desc:"Solar inverter 3.5kVA",qty:1,price:250000},
+    {desc:"Tubular battery 220Ah",qty:2,price:180000},
+    {desc:"Installation & accessories",qty:1,price:90000}
+  ];
+  $("payMethod").value="Bank Transfer"; $("payRef").value="";
+  $("bankName").value="Wema Bank"; $("acctName").value="Kiru Energy Ltd"; $("acctNo").value="127429081";
+  paidTouched=false; $("amtPaid").value="";
+  renderItems(); calc();
+}
+async function genNoRemote(){
+  const {data,error}=await SB.rpc("next_receipt_no");
+  if(error){ console.error("next_receipt_no error",error); return genNo(); }
+  return data;
+}
+function handleNewReceiptClick(){ newReceipt(); setView("editor"); }
+let currentView="editor";
+function setView(v){
+  currentView=v;
+  $("editorView").classList.toggle("offscreen", v!=="editor");
+  $("historyView").style.display = v==="history" ? "block" : "none";
+  document.querySelectorAll(".vtab").forEach(b=>b.classList.toggle("on", b.dataset.view===v));
+  if(v==="history") applyHistSearch();
+}
+document.querySelectorAll(".vtab").forEach(b=>b.addEventListener("click",()=>setView(b.dataset.view)));
+$("histSearch").addEventListener("input", applyHistSearch);
+
+$("newNo").addEventListener("click",async()=>{$("rcNo").value= synced ? await genNoRemote() : genNo(); calc(); queueAutosave();});
+["rcNo","rcDate","clientName","clientAddr","payMethod","payRef","bankName","acctName","acctNo"].forEach(id=>$(id).addEventListener("input",()=>{calc();queueAutosave();}));
+$("amtPaid").addEventListener("input",e=>{paidTouched=true; fmtCommasEl(e.target); calc(); queueAutosave();});
 renderItems(); calc();
-$("addItem").addEventListener("click",()=>{items.push({desc:"",qty:1,price:0});renderItems();calc();});
+$("addItem").addEventListener("click",()=>{items.push({desc:"",qty:1,price:0});renderItems();calc();queueAutosave();});
+$("saveRc").addEventListener("click",saveReceipt);
+$("newRcBtn").addEventListener("click",handleNewReceiptClick);
+$("newRcBtn2").addEventListener("click",handleNewReceiptClick);
 
 async function snap(){ return await html2canvas($("invoice"),{scale:2,backgroundColor:"#ffffff",useCORS:true}); }
-$("dlPng").addEventListener("click",async()=>{
+async function downloadPng(){
   const c=await snap(); const a=document.createElement("a"); a.download=(val("rcNo")||"receipt")+".png"; a.href=c.toDataURL("image/png"); a.click();
-});
-$("dlPdf").addEventListener("click",async()=>{
-  const c=await snap(); const img=c.toDataURL("image/jpeg",0.95);
-  const {jsPDF}=window.jspdf; const pdf=new jsPDF({orientation:"p",unit:"pt",format:"a4",compress:true});
-  const pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight();
-  const ratio=Math.min(pw/c.width, ph/c.height); const w=c.width*ratio, h=c.height*ratio;
-  pdf.addImage(img,"JPEG",(pw-w)/2,16,w,h,undefined,"FAST"); pdf.save((val("rcNo")||"receipt")+".pdf");
-});
+}
+$("dlPng").addEventListener("click",downloadPng);
+function downloadPdf(){
+  setView("editor");
+  requestAnimationFrame(()=>window.print());
+}
+$("dlPdf").addEventListener("click",downloadPdf);
+
+async function initApp(){
+  if(!cfgOK() || !window.supabase){ await newReceipt(); renderHistTable([]); return; }
+  SB=window.supabase.createClient(window.KIRU_CONFIG.SUPABASE_URL, window.KIRU_CONFIG.SUPABASE_ANON_KEY);
+  const {data:{session}}=await SB.auth.getSession();
+  if(!session){
+    setSyncBanner("Not signed in — sign in from the main Kiru app in another tab, then reload this page to save receipts and see history.", false);
+    $("saveRc").disabled=true;
+    await newReceipt();
+    renderHistTable([]);
+    return;
+  }
+  synced=true;
+  currentUserEmail=(session.user&&session.user.email)||"";
+  await loadHistory();
+  await newReceipt();
+}
+initApp();
 </script>
 </body>
 </html>
