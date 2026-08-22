@@ -12,10 +12,17 @@ create table if not exists public.receipts (
   bank_name       text default 'Wema Bank',
   account_name    text default 'Kiru Energy Ltd',
   account_number  text default '127429081',
+  sign_name       text default 'Benedict Okpala',
+  sign_title      text default 'Director',
+  signature       text default '',
   created_by      text default '',
   created_at      timestamptz default now(),
   updated_at      timestamptz default now()
 );
+
+alter table public.receipts add column if not exists sign_name  text default 'Benedict Okpala';
+alter table public.receipts add column if not exists sign_title text default 'Director';
+alter table public.receipts add column if not exists signature  text default '';
 
 create index if not exists receipts_created_idx on public.receipts (created_at desc);
 
