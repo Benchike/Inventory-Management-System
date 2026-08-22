@@ -241,13 +241,6 @@ window.KIRU_CONFIG = {
       </div>
 
       <div class="sec">
-        <h2>Bank details</h2>
-        <div class="mb"><span class="lab">Bank name</span><input type="text" id="bankName" value="Wema Bank"></div>
-        <div class="mb"><span class="lab">Account name</span><input type="text" id="acctName" value="Kiru Energy Ltd"></div>
-        <div><span class="lab">Account number</span><input type="text" id="acctNo" value="127429081"></div>
-      </div>
-
-      <div class="sec">
         <h2>Sign-off</h2>
         <div class="row2 mb"><div><span class="lab">Received by</span><input type="text" id="signName" value="Benedict Okpala"></div>
           <div><span class="lab">Title</span><input type="text" id="signTitle" value="Director"></div></div>
@@ -298,8 +291,6 @@ window.KIRU_CONFIG = {
             <div class="h">Payment details</div>
             <div class="prow"><span>Method</span><span class="v" id="pv_method"></span></div>
             <div class="prow" id="pv_refrow"><span>Reference</span><span class="v" id="pv_ref"></span></div>
-            <div class="prow"><span>Bank</span><span class="v" id="pv_bank"></span></div>
-            <div class="prow"><span>Account</span><span class="v" id="pv_acct"></span></div>
           </div>
           <div class="pv-sumbox">
             <div class="srow"><span class="l">Total amount</span><span id="pv_total"></span></div>
@@ -477,8 +468,6 @@ function calc(){
   $("pv_addr").textContent=val("clientAddr")||"";
   $("pv_method").textContent=val("payMethod");
   if(val("payRef")){$("pv_refrow").style.display="flex";$("pv_ref").textContent=val("payRef");}else{$("pv_refrow").style.display="none";}
-  $("pv_bank").textContent=val("bankName")||"—";
-  $("pv_acct").textContent=(val("acctName")||"")+" · "+(val("acctNo")||"");
 
   // balance / paid tag
   if(bal>0.5){ $("pv_balrow").style.display="flex"; $("pv_balrow").classList.add("due"); $("pv_bal").textContent=ngn.format(bal);
@@ -511,7 +500,6 @@ function rowToReceipt(r){
     clientName:r.client_name||"", clientAddr:r.client_addr||"",
     items: Array.isArray(r.items)?r.items:[],
     payMethod:r.pay_method||"Bank Transfer", payRef:r.pay_ref||"", amountPaid:r.amount_paid||0,
-    bankName:r.bank_name||"Wema Bank", acctName:r.account_name||"Kiru Energy Ltd", acctNo:r.account_number||"127429081",
     signName:r.sign_name||"Benedict Okpala", signTitle:r.sign_title||"Director", signature:r.signature||""};
 }
 function formToRow(){
@@ -519,7 +507,6 @@ function formToRow(){
   return {rc_no:val("rcNo"), rc_date:val("rcDate")||null,
     client_name:val("clientName"), client_addr:val("clientAddr"),
     items:items, total_amt:currentTotal, pay_method:val("payMethod"), pay_ref:val("payRef"), amount_paid:paid,
-    bank_name:val("bankName"), account_name:val("acctName"), account_number:val("acctNo"),
     sign_name:val("signName"), sign_title:val("signTitle"), signature:customSig};
 }
 function loadReceiptIntoForm(rec){
@@ -528,7 +515,6 @@ function loadReceiptIntoForm(rec){
   $("clientName").value=rec.clientName; $("clientAddr").value=rec.clientAddr;
   items = rec.items && rec.items.length ? rec.items.map(x=>({desc:x.desc||"",qty:(x.qty!==undefined?x.qty:1),price:x.price||0})) : [];
   $("payMethod").value=rec.payMethod; $("payRef").value=rec.payRef;
-  $("bankName").value=rec.bankName; $("acctName").value=rec.acctName; $("acctNo").value=rec.acctNo;
   $("signName").value=rec.signName||"Benedict Okpala"; $("signTitle").value=rec.signTitle||"Director";
   customSig=rec.signature||"";
   const th=$("signThumb");
@@ -639,7 +625,6 @@ async function newReceipt(){
     {desc:"Installation & accessories",qty:1,price:90000}
   ];
   $("payMethod").value="Bank Transfer"; $("payRef").value="";
-  $("bankName").value="Wema Bank"; $("acctName").value="Kiru Energy Ltd"; $("acctNo").value="127429081";
   $("signName").value="Benedict Okpala"; $("signTitle").value="Director";
   $("signFile").value=""; customSig="";
   const th=$("signThumb"); th.classList.remove("show"); th.removeAttribute("src"); $("clearSig").style.display="none";
@@ -664,7 +649,7 @@ document.querySelectorAll(".vtab").forEach(b=>b.addEventListener("click",()=>set
 $("histSearch").addEventListener("input", applyHistSearch);
 
 $("newNo").addEventListener("click",async()=>{$("rcNo").value= synced ? await genNoRemote() : genNo(); calc(); queueAutosave();});
-["rcNo","rcDate","clientName","clientAddr","payMethod","payRef","bankName","acctName","acctNo","signName","signTitle"].forEach(id=>$(id).addEventListener("input",()=>{calc();queueAutosave();}));
+["rcNo","rcDate","clientName","clientAddr","payMethod","payRef","signName","signTitle"].forEach(id=>$(id).addEventListener("input",()=>{calc();queueAutosave();}));
 $("amtPaid").addEventListener("input",e=>{paidTouched=true; fmtCommasEl(e.target); calc(); queueAutosave();});
 renderItems(); calc();
 $("addItem").addEventListener("click",()=>{items.push({desc:"",qty:1,price:0});renderItems();calc();queueAutosave();});
