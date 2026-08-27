@@ -964,7 +964,10 @@ function viewPO(){
     <div class="card pad">
       <div class="btnrow" style="justify-content:space-between;margin-bottom:14px">
         <div><h3>Purchase Orders</h3><div class="sub" style="margin:0">Receiving a purchase order adds its items to stock.</div></div>
-        <button class="btn" id="newPO">+ Create purchase order</button>
+        <div class="btnrow">
+          <button class="btn ghost" id="expSup">⬇ Download by supplier</button>
+          <button class="btn" id="newPO">+ Create purchase order</button>
+        </div>
       </div>
       <div class="searchbar" style="margin-bottom:14px">
         <input id="p_search" placeholder="Search PO no. or supplier" value="${esc(poFilter)}">
@@ -991,6 +994,7 @@ function viewPO(){
     </div>`;
   $("p_search").addEventListener("input",e=>{poFilter=e.target.value;const p=e.target.selectionStart;viewPO();const s=$("p_search");s.focus();s.setSelectionRange(p,p);});
   $("p_sort").addEventListener("change",e=>{poSort=e.target.value;viewPO();});
+  $("expSup").addEventListener("click",openSupplierExportModal);
   $("newPO").addEventListener("click",()=>{
     if(!DB.items.length){toast("Add stock items first");return;}
     draft={kind:"po",id:uid(),no:"",date:today(),supplier:"",note:"",lines:[{itemId:"",qty:1,cost:0}],preparedBy:"",approvedBy:"",approverTitle:"",sig:null};
@@ -1026,6 +1030,52 @@ function viewPO(){
     const ok=await deleteDocDB(p.id);
     if(ok){toast(p.no+" deleted"); viewPO();}
   }));
+}
+function supplierList(){
+  const set=new Set();
+  DB.pos.forEach(p=>{ const s=(p.supplier||"").trim(); if(s) set.add(s); });
+  return [...set].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
+}
+let supSelected=new Set();
+function openSupplierExportModal(){
+  const suppliers=supplierList();
+  if(!suppliers.length){toast("No suppliers recorded yet");return;}
+  supSelected=new Set();
+  $("modalInner").innerHTML=`<h3>Download by supplier</h3><div class="sub">Select one or more suppliers to download all their purchase orders as a single report.</div>
+    <div class="mb" style="margin-top:10px"><input id="sup_filter" placeholder="Filter suppliers…"></div>
+    <div class="btnrow" style="margin-bottom:8px"><button class="btn ghost sm" id="sup_all">Select all</button><button class="btn ghost sm" id="sup_none">Clear</button></div>
+    <div id="sup_list" style="max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px"></div>
+    <div class="btnrow" style="margin-top:14px"><button class="btn" id="sup_dl">Download report</button><button class="btn ghost" id="sup_cancel">Cancel</button></div>`;
+  function renderSupList(q){
+    const ql=(q||"").trim().toLowerCase();
+    const filtered=suppliers.filter(s=>!ql||s.toLowerCase().includes(ql));
+    $("sup_list").innerHTML=filtered.map(s=>{
+      const count=DB.pos.filter(p=>(p.supplier||"").trim()===s).length;
+      return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer">
+        <input type="checkbox" class="sup_cb" value="${esc(s)}" ${supSelected.has(s)?'checked':''}>
+        <span style="flex:1">${esc(s)}</span><span style="color:var(--muted);font-size:.8rem">${count} PO${count===1?'':'s'}</span></label>`;
+    }).join("")||'<div class="empty">No suppliers match</div>';
+    $("sup_list").querySelectorAll(".sup_cb").forEach(cb=>cb.addEventListener("change",()=>{
+      if(cb.checked) supSelected.add(cb.value); else supSelected.delete(cb.value);
+    }));
+  }
+  renderSupList("");
+  $("modal").classList.add("show");
+  $("sup_filter").addEventListener("input",e=>renderSupList(e.target.value));
+  $("sup_all").addEventListener("click",()=>{
+    const ql=($("sup_filter").value||"").trim().toLowerCase();
+    suppliers.filter(s=>!ql||s.toLowerCase().includes(ql)).forEach(s=>supSelected.add(s));
+    renderSupList($("sup_filter").value);
+  });
+  $("sup_none").addEventListener("click",()=>{ supSelected=new Set(); renderSupList($("sup_filter").value); });
+  $("sup_cancel").addEventListener("click",closeModal);
+  $("sup_dl").addEventListener("click",()=>{
+    if(!supSelected.size){toast("Select at least one supplier");return;}
+    const chosen=[...supSelected];
+    const list=DB.pos.filter(p=>chosen.includes((p.supplier||"").trim()));
+    closeModal();
+    printDoc(docHTML_SupplierReport(chosen,list));
+  });
 }
 function poForm(){
   const isEdit=draft.no!=="";
@@ -1314,6 +1364,29 @@ function docHTML_PO(p){
       <thead><tr><th class="c">S/N</th><th class="l">Item</th><th class="c">Unit</th><th>Qty</th><th>Unit Cost</th><th>Amount</th></tr></thead>
       <tbody>${rows}<tr class="tot"><td></td><td class="l" style="color:#fff">TOTAL</td><td></td><td></td><td></td><td>${ngn.format(total)}</td></tr></tbody></table>
     ${signBlock(p,"Approved by")}
+    ${docFoot()}</div>`;
+}
+function docHTML_SupplierReport(suppliers,list){
+  const bySupplier={};
+  list.forEach(p=>{ const s=(p.supplier||"").trim()||"(No supplier)"; (bySupplier[s]=bySupplier[s]||[]).push(p); });
+  const names=Object.keys(bySupplier).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
+  let grand=0;
+  const sections=names.map(name=>{
+    const pos=bySupplier[name].slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    const subtotal=pos.reduce((s,p)=>s+poValue(p),0);
+    grand+=subtotal;
+    const rows=pos.map((p,i)=>`<tr><td class="c">${i+1}</td><td class="l">${esc(p.no)}</td><td class="c">${fmtDate(p.date)}</td>
+      <td>${p.lines.length}</td><td>${ngn.format(poValue(p))}</td><td class="c">${p.status==="received"?"Received":"Draft"}</td>
+      <td class="c">${p.paymentReceipt?"Uploaded":"—"}</td></tr>`).join("");
+    return `<div class="rep-h">${esc(name)} <span style="font-weight:500">(${pos.length} PO${pos.length===1?'':'s'})</span></div>
+      <table class="doc"><colgroup><col style="width:34px"><col><col style="width:92px"><col style="width:52px"><col style="width:96px"><col style="width:78px"><col style="width:78px"></colgroup>
+        <thead><tr><th class="c">S/N</th><th class="l">PO No.</th><th class="c">Date</th><th>Lines</th><th>Value</th><th class="c">Status</th><th class="c">Receipt</th></tr></thead>
+        <tbody>${rows}<tr class="tot"><td></td><td class="l" style="color:#fff">SUBTOTAL</td><td></td><td></td><td>${ngn.format(subtotal)}</td><td></td><td></td></tr></tbody></table>`;
+  }).join("");
+  return `<div class="docwrap">
+    ${docHead("SUPPLIER TRANSACTIONS REPORT",`<b>Suppliers:</b> ${suppliers.map(s=>esc(s)).join(", ")}<br><b>Purchase orders:</b> ${list.length}<br><b>Generated:</b> ${fmtDate(today())}`)}
+    ${sections||'<div style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No purchase orders found for the selected suppliers.</div>'}
+    <div class="rep-kpi" style="margin-top:14px;grid-template-columns:1fr"><div class="c dk"><div class="l">Grand total (${names.length} supplier${names.length===1?'':'s'}, ${list.length} PO${list.length===1?'':'s'})</div><div class="v">${ngn.format(grand)}</div></div></div>
     ${docFoot()}</div>`;
 }
 function docHTML_MRO(m){
