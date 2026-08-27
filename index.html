@@ -687,7 +687,10 @@ function viewItems(){
         <button class="btn" id="i_add">Add item</button>
       </div>
       <div class="card pad">
-        <h3>Stock items</h3><div class="sub">${DB.items.length} item${DB.items.length===1?'':'s'} in catalogue · value ${ngn.format(invValue())}</div>
+        <div class="btnrow" style="justify-content:space-between;margin-bottom:4px">
+          <div><h3>Stock items</h3><div class="sub" style="margin:0">${DB.items.length} item${DB.items.length===1?'':'s'} in catalogue · value ${ngn.format(invValue())}</div></div>
+          <button class="btn ghost" id="expStock">📅 Download stock report</button>
+        </div>
         <div class="searchbar">
           <input id="i_search" placeholder="Search name, SKU, category" value="${esc(itemFilter)}">
           <select id="i_catf"><option value="">All categories</option>${CATS.map(c=>`<option ${itemCat===c?'selected':''}>${c}</option>`).join("")}</select>
@@ -706,6 +709,7 @@ function viewItems(){
   $("i_cost").addEventListener("input",e=>fmtCommasEl(e.target));
   $("i_search").addEventListener("input",e=>{itemFilter=e.target.value;const p=e.target.selectionStart;viewItems();const s=$("i_search");s.focus();s.setSelectionRange(p,p);});
   $("i_catf").addEventListener("change",e=>{itemCat=e.target.value;viewItems();});
+  $("expStock").addEventListener("click",openStockExportModal);
   $("i_add").addEventListener("click",async()=>{
     const name=$("i_name").value.trim(); if(!name){toast("Enter an item name");return;}
     const ok=await addItemDB({name,sku:$("i_sku").value.trim(),unit:$("i_unit").value,category:$("i_cat").value,
@@ -741,6 +745,56 @@ function editItem(id){
 }
 function closeModal(){$("modal").classList.remove("show");}
 $("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal();});
+
+let stockSelected=new Set();
+let stockRepFrom="",stockRepTo="";
+function openStockExportModal(){
+  const items=DB.items.slice().sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
+  if(!items.length){toast("No stock items yet");return;}
+  stockSelected=new Set();
+  if(!stockRepFrom){const d=new Date();d.setMonth(d.getMonth()-1);stockRepFrom=d.toISOString().slice(0,10);}
+  if(!stockRepTo)stockRepTo=today();
+  $("modalInner").innerHTML=`<h3>Download stock report</h3><div class="sub">Select one or more stock items and a date range, then view or download the report.</div>
+    <div class="row2 mb" style="margin-top:10px">
+      <div><span class="lab">From</span><input type="date" id="st_from" value="${stockRepFrom}"></div>
+      <div><span class="lab">To</span><input type="date" id="st_to" value="${stockRepTo}"></div>
+    </div>
+    <div class="mb"><input id="st_filter" placeholder="Filter items…"></div>
+    <div class="btnrow" style="margin-bottom:8px"><button class="btn ghost sm" id="st_all">Select all</button><button class="btn ghost sm" id="st_none">Clear</button></div>
+    <div id="st_list" style="max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px"></div>
+    <div class="btnrow" style="margin-top:14px"><button class="btn" id="st_view">View report</button><button class="btn ghost" id="st_cancel">Cancel</button></div>`;
+  function matchesQ(it,ql){return !ql||(it.name+" "+(it.sku||"")+" "+(it.category||"")).toLowerCase().includes(ql);}
+  function renderStList(q){
+    const ql=(q||"").trim().toLowerCase();
+    const filtered=items.filter(it=>matchesQ(it,ql));
+    $("st_list").innerHTML=filtered.map(it=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer">
+      <input type="checkbox" class="st_cb" value="${it.id}" ${stockSelected.has(it.id)?'checked':''}>
+      <span style="flex:1">${esc(it.name)}${it.sku?`<span style="color:var(--muted);font-size:.78rem"> · ${esc(it.sku)}</span>`:''}</span>
+      <span style="color:var(--muted);font-size:.8rem">${n2(it.qty)} ${esc(it.unit||'')}</span></label>`).join("")||'<div class="empty">No items match</div>';
+    $("st_list").querySelectorAll(".st_cb").forEach(cb=>cb.addEventListener("change",()=>{
+      if(cb.checked)stockSelected.add(cb.value); else stockSelected.delete(cb.value);
+    }));
+  }
+  renderStList("");
+  $("modal").classList.add("show");
+  $("st_filter").addEventListener("input",e=>renderStList(e.target.value));
+  $("st_from").addEventListener("input",e=>stockRepFrom=e.target.value);
+  $("st_to").addEventListener("input",e=>stockRepTo=e.target.value);
+  $("st_all").addEventListener("click",()=>{
+    const ql=($("st_filter").value||"").trim().toLowerCase();
+    items.filter(it=>matchesQ(it,ql)).forEach(it=>stockSelected.add(it.id));
+    renderStList($("st_filter").value);
+  });
+  $("st_none").addEventListener("click",()=>{stockSelected=new Set();renderStList($("st_filter").value);});
+  $("st_cancel").addEventListener("click",closeModal);
+  $("st_view").addEventListener("click",()=>{
+    if(!stockSelected.size){toast("Select at least one stock item");return;}
+    if(!stockRepFrom||!stockRepTo){toast("Choose a date range");return;}
+    const ids=[...stockSelected];
+    closeModal();
+    previewDoc(docHTML_StockReport(ids,stockRepFrom,stockRepTo));
+  });
+}
 
 /* ============ BOS PACKAGES ============ */
 function viewBOS(){
@@ -1461,9 +1515,9 @@ function viewReport(){
   renderRepPreview();
 }
 function renderRepPreview(){$("repPreview").innerHTML=reportHTML();}
-function reportRows(){
-  const tx=allTx(), from=repFrom, to=repTo;
-  return DB.items.map(it=>{
+function computeStockRows(items,from,to){
+  const tx=allTx();
+  return items.map(it=>{
     const mine=tx.filter(t=>t.itemId===it.id);
     const inAfterFrom=mine.filter(t=>t.type==="IN"&&t.date>=from).reduce((s,t)=>s+(t.qty||0),0);
     const outAfterFrom=mine.filter(t=>t.type==="OUT"&&t.date>=from).reduce((s,t)=>s+(t.qty||0),0);
@@ -1476,6 +1530,7 @@ function reportRows(){
     return {it,opening,rin,rout,closing,inVal,outVal};
   });
 }
+function reportRows(){ return computeStockRows(DB.items,repFrom,repTo); }
 function reportHTML(){
   const rows=reportRows(), tx=allTx().filter(t=>t.date>=repFrom&&t.date<=repTo);
   const totIn=rows.reduce((s,r)=>s+r.inVal,0), totOut=rows.reduce((s,r)=>s+r.outVal,0);
@@ -1504,6 +1559,38 @@ function reportHTML(){
     <table class="doc"><colgroup><col style="width:34px"><col style="width:72px"><col><col style="width:60px"><col style="width:52px"><col style="width:118px"><col style="width:130px"></colgroup>
       <thead><tr><th class="c">S/N</th><th class="c">Date</th><th class="l">Item</th><th class="c">Type</th><th>Qty</th><th class="l">Reference</th><th class="l">Supplier / Project</th></tr></thead>
       <tbody>${txRows||'<tr><td colspan="7" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No stock movements in this period</td></tr>'}</tbody></table>
+    ${docFoot()}</div>`;
+}
+function docHTML_StockReport(itemIds,from,to){
+  const items=DB.items.filter(it=>itemIds.includes(it.id));
+  const rows=computeStockRows(items,from,to);
+  const tx=allTx().filter(t=>itemIds.includes(t.itemId)&&t.date>=from&&t.date<=to).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  const totIn=rows.reduce((s,r)=>s+r.inVal,0), totOut=rows.reduce((s,r)=>s+r.outVal,0);
+  const closeVal=rows.reduce((s,r)=>s+r.closing*(r.it.cost||0),0);
+  const body=rows.map((r,i)=>`<tr><td class="c">${i+1}</td><td class="l">${esc(r.it.name)}${r.it.sku?`<div style="font-size:9.5px;color:#8392a5;font-weight:500">${esc(r.it.sku)}</div>`:""}</td>
+      <td class="c">${esc(r.it.category||"—")}</td><td class="c">${esc(r.it.unit||"")}</td>
+      <td>${n2(r.opening)}</td><td>${n2(r.rin)}</td><td>${n2(r.rout)}</td><td><b>${n2(r.closing)}</b></td>
+      <td>${ngn.format(r.it.cost||0)}</td><td>${ngn.format(r.closing*(r.it.cost||0))}</td></tr>`).join("");
+  const txRows=tx.map((t,i)=>{const it=itemById(t.itemId);
+    return `<tr><td class="c">${i+1}</td><td class="c">${fmtDate(t.date)}</td><td class="l">${esc(it?it.name:"(removed)")}</td>
+      <td class="c">${t.type==="IN"?"Receipt":"Issue"}</td><td>${n2(t.qty)}</td><td class="l">${esc(t.ref)}</td><td class="l">${esc(t.party||"—")}</td></tr>`;}).join("");
+  return `<div class="docwrap">
+    ${docHead("STOCK REPORT",`<b>Items selected:</b> ${rows.length}<br><b>Period:</b> ${fmtDate(from)} – ${fmtDate(to)}<br><b>Generated:</b> ${fmtDate(today())}`)}
+    <div class="rep-kpi">
+      <div class="c"><div class="l">Items selected</div><div class="v">${rows.length}</div></div>
+      <div class="c"><div class="l">Receipts in period</div><div class="v">${ngn.format(totIn)}</div></div>
+      <div class="c"><div class="l">Issues in period</div><div class="v">${ngn.format(totOut)}</div></div>
+      <div class="c dk"><div class="l">Closing stock value</div><div class="v">${ngn.format(closeVal)}</div></div>
+    </div>
+    <div class="rep-h">Stock Summary</div>
+    <table class="doc"><colgroup><col style="width:34px"><col><col style="width:92px"><col style="width:44px"><col style="width:56px"><col style="width:52px"><col style="width:52px"><col style="width:56px"><col style="width:78px"><col style="width:88px"></colgroup>
+      <thead><tr><th class="c">S/N</th><th class="l">Item</th><th class="c">Category</th><th class="c">Unit</th><th>Opening</th><th>Received</th><th>Issued</th><th>Closing</th><th>Unit Cost</th><th>Closing Value</th></tr></thead>
+      <tbody>${body||'<tr><td colspan="10" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No items selected</td></tr>'}
+        <tr class="tot"><td></td><td class="l" style="color:#fff">TOTAL</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>${ngn.format(closeVal)}</td></tr></tbody></table>
+    <div class="rep-h">Transaction Log</div>
+    <table class="doc"><colgroup><col style="width:34px"><col style="width:72px"><col><col style="width:60px"><col style="width:52px"><col style="width:118px"><col style="width:130px"></colgroup>
+      <thead><tr><th class="c">S/N</th><th class="c">Date</th><th class="l">Item</th><th class="c">Type</th><th>Qty</th><th class="l">Reference</th><th class="l">Supplier / Project</th></tr></thead>
+      <tbody>${txRows||'<tr><td colspan="7" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No stock movements for the selected items in this period</td></tr>'}</tbody></table>
     ${docFoot()}</div>`;
 }
 
