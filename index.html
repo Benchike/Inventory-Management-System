@@ -371,7 +371,7 @@ async function saveDocDB(kind,d){
 async function updateMRODB(d){
   const row={doc_date:d.date,note:d.note||"",lines:d.lines,
     requested_by:d.requestedBy||"",project:d.project||"",purpose:d.purpose||"",
-    approved_by:d.approvedBy||"",approver_title:d.approverTitle||""};
+    approved_by:d.approvedBy||"",approver_title:d.approverTitle||"",signature:d.sig||""};
   const {error}=await SB.from(tbl("documents")).update(row).eq("id",d.id).eq("status","draft");
   if(error){toast("Update failed: "+error.message);return false;}
   await pull(); return true;
@@ -379,7 +379,7 @@ async function updateMRODB(d){
 async function updatePODB(d){
   const row={doc_date:d.date,note:d.note||"",lines:d.lines,
     supplier:d.supplier||"",
-    approved_by:d.approvedBy||"",approver_title:d.approverTitle||""};
+    approved_by:d.approvedBy||"",approver_title:d.approverTitle||"",signature:d.sig||""};
   const {error}=await SB.from(tbl("documents")).update(row).eq("id",d.id).eq("status","draft");
   if(error){toast("Update failed: "+error.message);return false;}
   await pull(); return true;
@@ -967,12 +967,32 @@ function sigBlock(){
   return `<div class="row2 mb">
       <div><span class="lab">Approved by</span><input id="d_appr" value="${esc(draft.approvedBy||"")}"></div>
       <div><span class="lab">Approver title</span><input id="d_title" value="${esc(draft.approverTitle||"")}"></div>
+    </div>
+    <div class="mb"><span class="lab">Signature <small>(upload — background removed automatically)</small></span>
+      <label class="upbtn">Upload signature<input type="file" id="d_sigFile" accept="image/*" style="display:none"></label>
+      <img id="d_sigThumb" class="upthumb${draft.sig?' show':''}"${draft.sig?` src="${draft.sig}"`:''}>
+      <button class="btn ghost sm" id="d_sigClear" style="margin-top:8px;display:${draft.sig?'inline-block':'none'}">Remove signature</button>
     </div>`;
+}
+function applyDraftSig(dataURL){
+  draft.sig=dataURL||null;
+  const th=$("d_sigThumb"); if(!th)return;
+  if(dataURL){ th.src=dataURL; th.classList.add("show"); $("d_sigClear").style.display="inline-block"; }
+  else { th.classList.remove("show"); th.removeAttribute("src"); $("d_sigClear").style.display="none"; }
 }
 function wireSig(){
   ["d_appr","d_title"].forEach(id=>$(id)&&$(id).addEventListener("input",e=>{
     draft[{d_appr:"approvedBy",d_title:"approverTitle"}[id]]=e.target.value;
   }));
+  const fileInp=$("d_sigFile");
+  if(fileInp)fileInp.addEventListener("change",e=>{
+    const f=e.target.files[0]; if(!f)return;
+    const r=new FileReader();
+    r.onload=()=>processSignature(r.result,out=>applyDraftSig(out));
+    r.readAsDataURL(f);
+  });
+  const clearBtn=$("d_sigClear");
+  if(clearBtn)clearBtn.addEventListener("click",()=>{ $("d_sigFile").value=""; applyDraftSig(""); });
 }
 
 /* ============ PURCHASE ORDERS ============ */
