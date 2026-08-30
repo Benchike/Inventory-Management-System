@@ -235,7 +235,7 @@ const CAPS={
 /* line keys:
    panels (SGS only), inverter+battery (separate config), generator (all-in-one config), bos, iot */
 function newSite(i){return{
-  _id:null, ref:"KIRU-P1-"+String(i).padStart(3,"0"), customer:"", location:"", date:"",
+  _id:null, ref:"KIRU-P1-"+String(i).padStart(3,"0"), customer:"", location:"", date:"", evidenceLink:"",
   cls:"SGS", config:"separate",   // separate = inverter+battery, aio = all-in-one solar generator
   panels:{q:0,p:0,cap:""}, inverter:{q:0,p:0,cap:""}, battery:{q:0,p:0,cap:""}, generator:{q:0,p:0,cap:""}, bos:{q:1,p:0,cap:""}, iot:{q:1,p:0,cap:""}
 };}
@@ -263,13 +263,13 @@ function setSyncBanner(msg,ok){
   b.style.borderColor=ok?"rgba(0,164,255,.35)":"rgba(224,138,30,.4)";
 }
 function rowToSite(r){
-  return {_id:r.id, ref:r.ref||"", customer:r.customer||"", location:r.location||"", date:r.site_date||"",
+  return {_id:r.id, ref:r.ref||"", customer:r.customer||"", location:r.location||"", date:r.site_date||"", evidenceLink:r.evidence_link||"",
     cls:r.cls||"SGS", config:r.config||"separate",
     panels:r.panels||{q:0,p:0,cap:""}, inverter:r.inverter||{q:0,p:0,cap:""}, battery:r.battery||{q:0,p:0,cap:""},
     generator:r.generator||{q:0,p:0,cap:""}, bos:r.bos||{q:1,p:0,cap:""}, iot:r.iot||{q:1,p:0,cap:""}};
 }
 function siteToRow(s,order){
-  return {ref:s.ref, customer:s.customer, location:s.location, site_date:s.date||null, cls:s.cls, config:s.config,
+  return {ref:s.ref, customer:s.customer, location:s.location, site_date:s.date||null, evidence_link:s.evidenceLink||"", cls:s.cls, config:s.config,
     panels:s.panels, inverter:s.inverter, battery:s.battery, generator:s.generator, bos:s.bos, iot:s.iot,
     period: val("period"), sort_order: order};
 }
@@ -439,6 +439,8 @@ function renderForm(){
       <div><span class="lab">Location</span><input data-s="location" value="${esc(s.location)}"></div></div>
     <div class="row2 mb"><div><span class="lab">Name of customer</span><input data-s="customer" value="${esc(s.customer)}"></div>
       <div><span class="lab">Commissioned date</span><input type="date" data-s="date" value="${esc(s.date)}"></div></div>
+    <div class="mb"><span class="lab">Link to cost evidence <small>(supplier invoice, receipt, or bank transfer proof)</small></span>
+      <input type="url" data-s="evidenceLink" placeholder="https://…" value="${esc(s.evidenceLink)}"></div>
     <div class="mb"><span class="lab">Class of system</span>
       <div class="seg"><div class="segbtn ${s.cls==='SGS'?'on':''}" data-cls="SGS">SGS<small>Solar Generator System</small></div>
         <div class="segbtn ${s.cls==='GBS'?'on':''}" data-cls="GBS">GBS<small>Grid Back-up System</small></div></div></div>
@@ -525,7 +527,8 @@ function render(){
       return `<tr><td class="l">${label}</td><td class="c">${esc(s[k].cap)||'—'}</td><td class="c">${isLot(k)?'Lot':(s[k].q||0)}</td><td>${ngn.format(s[k].p||0)}</td><td>${ngn.format(a)}</td><td class="eur">${eur.format(a/fx)}</td></tr>`;
     }).join("");
     return `<div class="brk avoid-break">
-      <div class="bt"><div><div class="nm">${esc(s.customer)||'—'}</div><div class="lo">${esc(s.location)||''}${s.date?' · '+fmtDate(s.date):''}</div></div>
+      <div class="bt"><div><div class="nm">${esc(s.customer)||'—'}</div><div class="lo">${esc(s.location)||''}${s.date?' · '+fmtDate(s.date):''}</div>
+          ${s.evidenceLink?`<div class="lo" style="margin-top:2px"><a href="${esc(s.evidenceLink)}" target="_blank" rel="noopener" style="color:#0086d4;font-weight:700;text-decoration:none">🔗 Cost evidence</a></div>`:''}</div>
         <div class="rt">${esc(s.ref)}<br><span class="badge ${s.cls==='SGS'?'sgs':'gbs'}">${s.cls}</span> <span class="badge ${s.config==='aio'?'gen':'sep'}">${s.config==='aio'?'AIO GEN':'INV+BATT'}</span></div></div>
       <table class="cost"><thead><tr><th class="l">Material</th><th class="c">Capacity</th><th class="c">Qty</th><th>Unit cost (₦)</th><th>Amount (₦)</th><th>Amount (€)</th></tr></thead>
         <tbody>${lines}<tr class="sub"><td class="l">Installation total</td><td></td><td></td><td></td><td>${ngn.format(r.t)}</td><td class="eur">${eur.format(r.t/fx)}</td></tr></tbody></table>
