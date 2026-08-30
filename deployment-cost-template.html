@@ -553,7 +553,7 @@ function render(){
     }).join("");
     return `<div class="brk avoid-break">
       <div class="bt"><div><div class="nm">${esc(s.customer)||'—'}</div><div class="lo">${esc(s.location)||''}${s.date?' · '+fmtDate(s.date):''}</div>
-          ${(s.evidenceLinks&&s.evidenceLinks.length)?`<div class="lo" style="margin-top:2px">${s.evidenceLinks.map((l,i)=>`<a href="${esc(l)}" target="_blank" rel="noopener" style="color:#0086d4;font-weight:700;text-decoration:none;margin-right:10px">🔗 Evidence${s.evidenceLinks.length>1?' '+(i+1):''}</a>`).join('')}</div>`:''}</div>
+          ${(s.evidenceLinks&&s.evidenceLinks.length)?`<div class="lo" style="margin-top:2px">${s.evidenceLinks.map((l,i)=>`<a href="${esc(l)}" target="_blank" rel="noopener" style="color:#0086d4;font-weight:700;text-decoration:none;margin-right:10px">🔗 Purchase Document${s.evidenceLinks.length>1?' '+(i+1):''}</a>`).join('')}</div>`:''}</div>
         <div class="rt">${esc(s.ref)}<br><span class="badge ${s.cls==='SGS'?'sgs':'gbs'}">${s.cls}</span> <span class="badge ${s.config==='aio'?'gen':'sep'}">${s.config==='aio'?'AIO GEN':'INV+BATT'}</span></div></div>
       <table class="cost"><thead><tr><th class="l">Material</th><th class="c">Capacity</th><th class="c">Qty</th><th>Unit cost (₦)</th><th>Amount (₦)</th><th>Amount (€)</th></tr></thead>
         <tbody>${lines}<tr class="sub"><td class="l">Installation total</td><td></td><td></td><td></td><td>${ngn.format(r.t)}</td><td class="eur">${eur.format(r.t/fx)}</td></tr></tbody></table>
