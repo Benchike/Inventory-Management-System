@@ -482,6 +482,7 @@ create table if not exists public.lif_deployment_costs (
   site_date   date,
   evidence_link  text default '',
   evidence_links jsonb not null default '[]'::jsonb,
+  media_links    jsonb not null default '[]'::jsonb,
   cls         text not null default 'SGS' check (cls in ('SGS','GBS')),
   config      text not null default 'separate' check (config in ('separate','aio')),
   panels      jsonb not null default '{"q":0,"p":0,"cap":""}'::jsonb,
@@ -498,6 +499,7 @@ create table if not exists public.lif_deployment_costs (
 
 alter table public.lif_deployment_costs add column if not exists evidence_link text default '';
 alter table public.lif_deployment_costs add column if not exists evidence_links jsonb not null default '[]'::jsonb;
+alter table public.lif_deployment_costs add column if not exists media_links jsonb not null default '[]'::jsonb;
 
 create index if not exists lif_deployment_costs_sort_idx on public.lif_deployment_costs (sort_order);
 

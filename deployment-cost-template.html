@@ -235,7 +235,7 @@ const CAPS={
 /* line keys:
    panels (SGS only), inverter+battery (separate config), generator (all-in-one config), bos, iot */
 function newSite(i){return{
-  _id:null, ref:"KIRU-P1-"+String(i).padStart(3,"0"), customer:"", location:"", date:"", evidenceLinks:[],
+  _id:null, ref:"KIRU-P1-"+String(i).padStart(3,"0"), customer:"", location:"", date:"", evidenceLinks:[], mediaLinks:[],
   cls:"SGS", config:"separate",   // separate = inverter+battery, aio = all-in-one solar generator
   panels:{q:0,p:0,cap:""}, inverter:{q:0,p:0,cap:""}, battery:{q:0,p:0,cap:""}, generator:{q:0,p:0,cap:""}, bos:{q:1,p:0,cap:""}, iot:{q:1,p:0,cap:""}
 };}
@@ -265,13 +265,15 @@ function setSyncBanner(msg,ok){
 function rowToSite(r){
   return {_id:r.id, ref:r.ref||"", customer:r.customer||"", location:r.location||"", date:r.site_date||"",
     evidenceLinks: Array.isArray(r.evidence_links)&&r.evidence_links.length ? r.evidence_links : (r.evidence_link?[r.evidence_link]:[]),
+    mediaLinks: Array.isArray(r.media_links) ? r.media_links : [],
     cls:r.cls||"SGS", config:r.config||"separate",
     panels:r.panels||{q:0,p:0,cap:""}, inverter:r.inverter||{q:0,p:0,cap:""}, battery:r.battery||{q:0,p:0,cap:""},
     generator:r.generator||{q:0,p:0,cap:""}, bos:r.bos||{q:1,p:0,cap:""}, iot:r.iot||{q:1,p:0,cap:""}};
 }
 function siteToRow(s,order){
   return {ref:s.ref, customer:s.customer, location:s.location, site_date:s.date||null,
-    evidence_links:(s.evidenceLinks||[]).map(x=>(x||"").trim()).filter(Boolean), cls:s.cls, config:s.config,
+    evidence_links:(s.evidenceLinks||[]).map(x=>(x||"").trim()).filter(Boolean),
+    media_links:(s.mediaLinks||[]).map(x=>(x||"").trim()).filter(Boolean), cls:s.cls, config:s.config,
     panels:s.panels, inverter:s.inverter, battery:s.battery, generator:s.generator, bos:s.bos, iot:s.iot,
     period: val("period"), sort_order: order};
 }
@@ -441,6 +443,11 @@ function renderForm(){
       <input type="url" data-evi="${i}" placeholder="https://…" value="${esc(link)}">
       <button class="delbtn" data-delev="${i}" type="button" ${evLinks.length<=1?'style="visibility:hidden"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>
     </div>`).join("");
+  const mdLinks=(s.mediaLinks&&s.mediaLinks.length)?s.mediaLinks:[""];
+  const mdRows=mdLinks.map((link,i)=>`<div class="row2 mb" style="grid-template-columns:1fr 34px">
+      <input type="url" data-mdi="${i}" placeholder="https://…" value="${esc(link)}">
+      <button class="delbtn" data-delmd="${i}" type="button" ${mdLinks.length<=1?'style="visibility:hidden"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>
+    </div>`).join("");
   $("siteForm").innerHTML=`
     <div class="row2 mb"><div><span class="lab">Site ref</span><input data-s="ref" value="${esc(s.ref)}"></div>
       <div><span class="lab">Location</span><input data-s="location" value="${esc(s.location)}"></div></div>
@@ -449,6 +456,10 @@ function renderForm(){
     <div class="mb"><span class="lab">Cost evidence links <small>(supplier invoice, receipt, or bank transfer proof — add as many as needed)</small></span>
       ${evRows}
       <button class="addbtn" type="button" id="addEvLink">+ Add another link</button>
+    </div>
+    <div class="mb"><span class="lab">Photo &amp; video links <small>(installation photos/videos — add as many as needed)</small></span>
+      ${mdRows}
+      <button class="addbtn" type="button" id="addMdLink">+ Add another link</button>
     </div>
     <div class="mb"><span class="lab">Class of system</span>
       <div class="seg"><div class="segbtn ${s.cls==='SGS'?'on':''}" data-cls="SGS">SGS<small>Solar Generator System</small></div>
@@ -477,6 +488,22 @@ function renderForm(){
     sites[cur].evidenceLinks.push("");
     renderForm();
     const inputs=$("siteForm").querySelectorAll("[data-evi]");
+    if(inputs.length)inputs[inputs.length-1].focus();
+  });
+  $("siteForm").querySelectorAll("[data-mdi]").forEach(el=>el.addEventListener("input",e=>{
+    if(!sites[cur].mediaLinks)sites[cur].mediaLinks=[];
+    sites[cur].mediaLinks[+e.target.dataset.mdi]=e.target.value;
+    render(); queueSave(cur);
+  }));
+  $("siteForm").querySelectorAll("[data-delmd]").forEach(b=>b.addEventListener("click",()=>{
+    sites[cur].mediaLinks.splice(+b.dataset.delmd,1);
+    renderForm(); render(); queueSave(cur);
+  }));
+  $("addMdLink").addEventListener("click",()=>{
+    if(!sites[cur].mediaLinks)sites[cur].mediaLinks=[];
+    sites[cur].mediaLinks.push("");
+    renderForm();
+    const inputs=$("siteForm").querySelectorAll("[data-mdi]");
     if(inputs.length)inputs[inputs.length-1].focus();
   });
   $("siteForm").querySelectorAll("[data-k]").forEach(el=>el.addEventListener("input",e=>{
@@ -553,7 +580,8 @@ function render(){
     }).join("");
     return `<div class="brk avoid-break">
       <div class="bt"><div><div class="nm">${esc(s.customer)||'—'}</div><div class="lo">${esc(s.location)||''}${s.date?' · '+fmtDate(s.date):''}</div>
-          ${(s.evidenceLinks&&s.evidenceLinks.length)?`<div class="lo" style="margin-top:2px">${s.evidenceLinks.map((l,i)=>`<a href="${esc(l)}" target="_blank" rel="noopener" style="color:#0086d4;font-weight:700;text-decoration:none;margin-right:10px">🔗 Purchase Document${s.evidenceLinks.length>1?' '+(i+1):''}</a>`).join('')}</div>`:''}</div>
+          ${(s.evidenceLinks&&s.evidenceLinks.length)?`<div class="lo" style="margin-top:2px">${s.evidenceLinks.map((l,i)=>`<a href="${esc(l)}" target="_blank" rel="noopener" style="color:#0086d4;font-weight:700;text-decoration:none;margin-right:10px">🔗 Purchase Document${s.evidenceLinks.length>1?' '+(i+1):''}</a>`).join('')}</div>`:''}
+          ${(s.mediaLinks&&s.mediaLinks.length)?`<div class="lo" style="margin-top:2px">${s.mediaLinks.map((l,i)=>`<a href="${esc(l)}" target="_blank" rel="noopener" style="color:#0086d4;font-weight:700;text-decoration:none;margin-right:10px">📷 Site Media${s.mediaLinks.length>1?' '+(i+1):''}</a>`).join('')}</div>`:''}</div>
         <div class="rt">${esc(s.ref)}<br><span class="badge ${s.cls==='SGS'?'sgs':'gbs'}">${s.cls}</span> <span class="badge ${s.config==='aio'?'gen':'sep'}">${s.config==='aio'?'AIO GEN':'INV+BATT'}</span></div></div>
       <table class="cost"><thead><tr><th class="l">Material</th><th class="c">Capacity</th><th class="c">Qty</th><th>Unit cost (₦)</th><th>Amount (₦)</th><th>Amount (€)</th></tr></thead>
         <tbody>${lines}<tr class="sub"><td class="l">Installation total</td><td></td><td></td><td></td><td>${ngn.format(r.t)}</td><td class="eur">${eur.format(r.t/fx)}</td></tr></tbody></table>
