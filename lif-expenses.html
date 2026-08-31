@@ -504,7 +504,7 @@ function expenseReportHTML(from,to){
       <td>${ngn.format(e.amount||0)}${e.fx_rate?`<span class="eursub">${eur.format(expEur(e))}</span>`:''}</td><td>${e.fx_rate?n2(e.fx_rate):'—'}</td></tr>`).join("");
 
   return `<div class="docwrap">
-    ${docHead("EXPENSE REPORT",`<b>Period:</b> ${fmtDate(from)} – ${fmtDate(to)}<br><b>Generated:</b> ${fmtDate(today())}`)}
+    ${docHead("EXPENSE REPORT",`<b>Period:</b> ${fmtDate(from)} – ${fmtDate(to)}`)}
     <div class="rep-kpi">
       <div class="c"><div class="l">Entries</div><div class="v">${inRange.length}</div></div>
       <div class="c"><div class="l">Categories</div><div class="v">${Object.keys(byCat).length}</div></div>
