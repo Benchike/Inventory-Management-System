@@ -633,6 +633,7 @@ create table if not exists public.lif_expenses (
   vendor         text default '',
   payment_method text default '',
   receipt        text default '',
+  purchase_docs  jsonb not null default '[]'::jsonb,
   notes          text default '',
   created_by     text default '',
   created_at     timestamptz default now(),
@@ -640,6 +641,7 @@ create table if not exists public.lif_expenses (
 );
 
 alter table public.lif_expenses add column if not exists fx_rate numeric not null default 0;
+alter table public.lif_expenses add column if not exists purchase_docs jsonb not null default '[]'::jsonb;
 alter table public.lif_expenses alter column category set default 'Logistics / Site Expense';
 do $$
 declare r record;

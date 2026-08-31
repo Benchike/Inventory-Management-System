@@ -220,6 +220,10 @@
         <img id="receiptThumb" class="upthumb">
         <div id="receiptNote" class="receiptnote">📄 PDF receipt attached</div>
       </div>
+      <div><span class="lab">Purchase document links <small>(optional — invoice/receipt stored elsewhere, e.g. Drive or email)</small></span>
+        <div id="pdocList"></div>
+        <button type="button" class="upbtn" id="addPdocLink">+ Add link</button>
+      </div>
     </div>
     <div class="mfoot">
       <button class="btn del" id="modalDelete" style="display:none">Delete</button>
@@ -318,7 +322,28 @@ function setSyncBanner(msg,ok){
   b.style.border="1px solid "+(ok?"rgba(0,164,255,.35)":"rgba(224,138,30,.4)");
 }
 
-let expenses=[], editingId=null, currentReceipt="", currentReceiptIsPdf=false;
+let expenses=[], editingId=null, currentReceipt="", currentReceiptIsPdf=false, currentPdocs=[];
+function renderPdocList(){
+  const c=$("pdocList"); if(!c)return;
+  const list=currentPdocs.length?currentPdocs:[""];
+  c.innerHTML=list.map((link,i)=>`<div style="display:flex;gap:6px;margin-bottom:6px">
+      <input type="url" data-pdi="${i}" placeholder="https://…" value="${esc(link)}" style="flex:1">
+      <button type="button" class="abtn" data-delpdoc="${i}" style="${list.length<=1?'visibility:hidden':''}">✕</button>
+    </div>`).join("");
+  c.querySelectorAll("[data-pdi]").forEach(el=>el.addEventListener("input",e=>{
+    currentPdocs[+e.target.dataset.pdi]=e.target.value;
+  }));
+  c.querySelectorAll("[data-delpdoc]").forEach(b=>b.addEventListener("click",()=>{
+    currentPdocs.splice(+b.dataset.delpdoc,1);
+    renderPdocList();
+  }));
+}
+$("addPdocLink").addEventListener("click",()=>{
+  currentPdocs.push("");
+  renderPdocList();
+  const inputs=$("pdocList").querySelectorAll("[data-pdi]");
+  if(inputs.length)inputs[inputs.length-1].focus();
+});
 
 function matchesFilters(e){
   const q=$("search").value.trim().toLowerCase();
@@ -363,7 +388,7 @@ function render(){
       <td>${esc(e.site)||'—'}</td>
       <td class="amt">${ngn.format(e.amount||0)}${e.fx_rate?`<span class="eursub">${eur.format(expEur(e))}</span>`:''}</td>
       <td>${e.fx_rate?n2(e.fx_rate):'—'}</td>
-      <td>${e.receipt?`<a href="${e.receipt}" target="_blank" rel="noopener">View</a>`:'—'}</td>
+      <td>${e.receipt?`<a href="${e.receipt}" target="_blank" rel="noopener">View</a>`:'—'}${(e.purchase_docs&&e.purchase_docs.length)?`<div style="margin-top:2px">${e.purchase_docs.map((l,i)=>`<a href="${esc(l)}" target="_blank" rel="noopener" style="font-size:.68rem;margin-right:6px">Doc${e.purchase_docs.length>1?' '+(i+1):''}</a>`).join('')}</div>`:''}</td>
       <td><div class="rowactions">
         <button class="abtn" data-act="edit" data-id="${e.id}">Edit</button>
         ${isAdmin()?`<button class="abtn danger" data-act="delete" data-id="${e.id}">Delete</button>`:''}
@@ -401,6 +426,8 @@ function openModal(id){
   $("fReceiptFile").value="";
   updateEurPreview();
   setReceiptPreview(e?(e.receipt||""):"", e&&e.receipt?e.receipt.startsWith("data:application/pdf"):false);
+  currentPdocs=e&&Array.isArray(e.purchase_docs)?e.purchase_docs.slice():[];
+  renderPdocList();
   $("modalDelete").style.display=(e&&isAdmin())?"block":"none";
   $("modalBg").classList.add("show");
   $("fDesc").focus();
@@ -428,7 +455,8 @@ $("modalSave").addEventListener("click",async()=>{
   const row={
     expense_date:$("fDate").value, category:$("fCategory").value, description:desc,
     amount:num("fAmount"), fx_rate:num("fFx"), site:$("fSite").value.trim(), vendor:$("fVendor").value.trim(),
-    payment_method:$("fMethod").value, receipt:currentReceipt||"", notes:$("fNotes").value.trim()
+    payment_method:$("fMethod").value, receipt:currentReceipt||"",
+    purchase_docs:currentPdocs.map(x=>(x||"").trim()).filter(Boolean), notes:$("fNotes").value.trim()
   };
   if(editingId){
     const {error}=await SB.from("lif_expenses").update(row).eq("id",editingId);
@@ -472,7 +500,7 @@ function expenseReportHTML(from,to){
   const catRows=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>
     `<tr><td class="l">${esc(cat)}</td><td>${ngn.format(amt)}<span class="eursub">${eur.format(byCatEur[cat]||0)}</span></td><td>${total?n2(amt/total*100):'0'}%</td></tr>`).join("");
   const logRows=inRange.slice().sort((a,b)=>(a.expense_date||"").localeCompare(b.expense_date||"")).map(e=>
-    `<tr><td class="c">${fmtDate(e.expense_date)}</td><td class="l">${esc(e.ref)}</td><td class="l">${esc(e.category)}</td><td class="l">${esc(e.description)}</td>
+    `<tr><td class="c">${fmtDate(e.expense_date)}</td><td class="l">${esc(e.ref)}</td><td class="l">${esc(e.category)}</td><td class="l">${esc(e.description)}${(e.purchase_docs&&e.purchase_docs.length)?`<div style="margin-top:2px">${e.purchase_docs.map((l,i)=>`<a href="${esc(l)}" target="_blank" rel="noopener" style="font-size:9px;font-weight:700;color:#0086d4;text-decoration:none;margin-right:8px">🔗 Purchase Document${e.purchase_docs.length>1?' '+(i+1):''}</a>`).join('')}</div>`:''}</td>
       <td>${ngn.format(e.amount||0)}${e.fx_rate?`<span class="eursub">${eur.format(expEur(e))}</span>`:''}</td><td>${e.fx_rate?n2(e.fx_rate):'—'}</td></tr>`).join("");
 
   return `<div class="docwrap">
