@@ -174,20 +174,21 @@ window.KIRU_CONFIG = {
   </div>
 
   <div class="toolbar">
-    <input type="text" id="search" class="search" placeholder="Search by shop location, contact, state, or site no…">
+    <input type="text" id="search" class="search" placeholder="Search by site address, contact, state, or site no…">
     <select id="filterState"><option value="">All states</option></select>
     <select id="filterStage">
       <option value="">All stages</option>
       <option>Site Survey</option><option>Installation In Progress</option><option>Installation Complete</option>
       <option>Commissioned</option><option>Active – In Service</option>
     </select>
+    <button class="ghostbtn" id="printSummaryBtn">🖨️ Print sites summary</button>
     <button class="newbtn" id="newSiteBtn">+ Add site</button>
   </div>
 
   <div class="card">
     <div class="logtbwrap">
       <table class="logtable">
-        <thead><tr><th>Site No.</th><th>Shop Location</th><th>State / Region</th><th>Contact</th><th>Phone</th><th>Stage</th><th>Complaints</th><th></th></tr></thead>
+        <thead><tr><th>Site No.</th><th>Site Address</th><th>State / Region</th><th>Contact</th><th>Phone</th><th>Stage</th><th>Complaints</th><th></th></tr></thead>
         <tbody id="siteTbody"></tbody>
       </table>
     </div>
@@ -411,7 +412,7 @@ async function saveSiteNow(s){
 }
 function renderOverviewTab(s){
   $("siteModalBody").innerHTML=`
-    <div class="row2 mb"><div><span class="lab">Shop location</span><input data-f="shop_location" value="${esc(s.shop_location)}"></div>
+    <div class="row2 mb"><div><span class="lab">Site address</span><input data-f="shop_location" value="${esc(s.shop_location)}"></div>
       <div><span class="lab">State / Region</span><input data-f="state_region" value="${esc(s.state_region)}"></div></div>
     <div class="row2 mb"><div><span class="lab">Contact person</span><input data-f="contact_person" value="${esc(s.contact_person)}"></div>
       <div><span class="lab">Phone number</span><input data-f="phone_number" value="${esc(s.phone_number)}"></div></div>
@@ -602,7 +603,7 @@ function docHTML_SiteReport(s){
   return `<div class="docwrap">
     ${docHead("PROJECT SITE REPORT",`<b>Site:</b> ${esc(s.site_no)}<br><b>Stage:</b> ${esc(s.stage)}`)}
     <div class="rep-kpi">
-      <div class="c"><div class="l">Shop location</div><div class="v">${esc(s.shop_location)||'—'}</div></div>
+      <div class="c"><div class="l">Site address</div><div class="v">${esc(s.shop_location)||'—'}</div></div>
       <div class="c"><div class="l">State / Region</div><div class="v">${esc(s.state_region)||'—'}</div></div>
       <div class="c"><div class="l">Contact person</div><div class="v">${esc(s.contact_person)||'—'}</div></div>
       <div class="c dk"><div class="l">Phone number</div><div class="v">${esc(s.phone_number)||'—'}</div></div>
@@ -633,6 +634,39 @@ function docHTML_SiteReport(s){
 $("siteDlReport").addEventListener("click",()=>{
   const s=sites.find(x=>x.id===currentSiteId); if(!s)return;
   previewDoc(docHTML_SiteReport(s));
+});
+
+/* ---- All-sites summary ---- */
+function docHTML_SitesSummary(){
+  const list=sites.filter(matchesSiteFilters).slice().sort((a,b)=>(a.shop_location||"").localeCompare(b.shop_location||""));
+  const filtered=list.length!==sites.length;
+  const commissioned=list.filter(s=>s.stage==="Commissioned"||s.stage==="Active – In Service").length;
+  const openTotal=list.reduce((sum,s)=>sum+complaints.filter(c=>c.site_id===s.id&&c.status!=="Resolved").length,0);
+  const rows=list.map((s,i)=>{
+    const openC=complaints.filter(c=>c.site_id===s.id && c.status!=="Resolved").length;
+    const upcoming=maintenance.filter(m=>m.site_id===s.id && m.next_visit_due).slice().sort((a,b)=>(a.next_visit_due||"").localeCompare(b.next_visit_due||""))[0];
+    return `<tr><td class="c">${i+1}</td><td class="l">${esc(s.site_no)}</td>
+      <td class="l">${esc(s.shop_location)||'—'}${s.lease_term?`<div style="font-size:9px;color:#8392a5;font-weight:600">${esc(s.lease_term)}</div>`:''}</td>
+      <td class="l">${esc(s.state_region)||'—'}</td><td class="l">${esc(s.contact_person)||'—'}</td><td class="l">${esc(s.phone_number)||'—'}</td>
+      <td class="c">${esc(s.stage)}</td><td class="c">${openC||'—'}</td><td class="c">${upcoming?fmtDate(upcoming.next_visit_due):'—'}</td></tr>`;
+  }).join("");
+  return `<div class="docwrap">
+    ${docHead("PROJECT SITES SUMMARY",`<b>Sites:</b> ${list.length}${filtered?` of ${sites.length}`:''}<br><b>Generated:</b> ${fmtDate(today())}`)}
+    <div class="rep-kpi">
+      <div class="c"><div class="l">Total sites</div><div class="v">${list.length}</div></div>
+      <div class="c"><div class="l">Commissioned / Active</div><div class="v">${commissioned}</div></div>
+      <div class="c"><div class="l">Survey / In progress</div><div class="v">${list.length-commissioned}</div></div>
+      <div class="c dk"><div class="l">Open complaints</div><div class="v">${openTotal}</div></div>
+    </div>
+    <div class="rep-h">All Sites</div>
+    <table class="doc"><colgroup><col style="width:26px"><col style="width:130px"><col><col style="width:110px"><col style="width:110px"><col style="width:110px"><col style="width:120px"><col style="width:70px"><col style="width:80px"></colgroup>
+      <thead><tr><th class="c">S/N</th><th class="l">Site No.</th><th class="l">Site Address</th><th class="l">State / Region</th><th class="l">Contact</th><th class="l">Phone</th><th class="c">Stage</th><th class="c">Open Complaints</th><th class="c">Next Maintenance</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="9" style="text-align:center;color:#b8c2d0;font-style:italic;padding:14px">No sites match</td></tr>'}</tbody></table>
+    ${docFoot()}</div>`;
+}
+$("printSummaryBtn").addEventListener("click",()=>{
+  if(!sites.length){ alert("No sites recorded yet."); return; }
+  previewDoc(docHTML_SitesSummary());
 });
 
 async function pull(){
