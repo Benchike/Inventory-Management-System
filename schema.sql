@@ -625,7 +625,7 @@ create table if not exists public.lif_expenses (
   id             uuid primary key default gen_random_uuid(),
   ref            text not null default '',
   expense_date   date not null default current_date,
-  category       text not null default 'Logistics / Site Expense' check (category in ('Operating / Digital Services','Installation / Site Labour','Logistics / Site Expense','Fixed Asset / Field Equipment','Fixed Asset / Communication','Bank / Operating Cost','Safety / Field Equipment','Vehicle / Operating Cost','Printing / Marketing','Travels and Transportation')),
+  category       text not null default 'Logistics / Site Expense' check (category in ('Operating / Digital Services','Installation / Site Labour','Logistics / Site Expense','Fixed Asset / Field Equipment','Fixed Asset / Communication','Bank / Operating Cost','Safety / Field Equipment','Vehicle / Operating Cost','Printing / Marketing','Travels and Transportation','Marketing and Campaign')),
   description    text not null default '',
   amount         numeric not null default 0,
   fx_rate        numeric not null default 0,
@@ -652,7 +652,7 @@ begin
   end loop;
 end $$;
 alter table public.lif_expenses add constraint lif_expenses_category_check
-  check (category in ('Operating / Digital Services','Installation / Site Labour','Logistics / Site Expense','Fixed Asset / Field Equipment','Fixed Asset / Communication','Bank / Operating Cost','Safety / Field Equipment','Vehicle / Operating Cost','Printing / Marketing','Travels and Transportation'));
+  check (category in ('Operating / Digital Services','Installation / Site Labour','Logistics / Site Expense','Fixed Asset / Field Equipment','Fixed Asset / Communication','Bank / Operating Cost','Safety / Field Equipment','Vehicle / Operating Cost','Printing / Marketing','Travels and Transportation','Marketing and Campaign'));
 
 create index if not exists lif_expenses_date_idx on public.lif_expenses (expense_date desc);
 
