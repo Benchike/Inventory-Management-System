@@ -320,7 +320,7 @@ function renderSiteTable(){
     const openC=complaints.filter(c=>c.site_id===s.id && c.status!=="Resolved").length;
     return `<tr>
       <td><b>${esc(s.site_no)}</b></td>
-      <td>${esc(s.shop_location)||'—'}${s.lease_term?`<div style="font-size:.66rem;color:var(--muted);font-weight:600">${esc(s.lease_term)}</div>`:''}</td>
+      <td>${esc(s.shop_location)||'—'}</td>
       <td>${esc(s.state_region)||'—'}</td>
       <td>${esc(s.contact_person)||'—'}</td>
       <td>${esc(s.phone_number)||'—'}</td>
@@ -402,7 +402,7 @@ function queueSiteSave(s){
 }
 async function saveSiteNow(s){
   const row={shop_location:s.shop_location||"", state_region:s.state_region||"", contact_person:s.contact_person||"",
-    phone_number:s.phone_number||"", lease_term:s.lease_term||"", stage:s.stage||"Site Survey",
+    phone_number:s.phone_number||"", stage:s.stage||"Site Survey",
     survey_date:s.survey_date||null, install_start_date:s.install_start_date||null,
     install_complete_date:s.install_complete_date||null, commissioning_date:s.commissioning_date||null,
     pre_install_photos:s.pre_install_photos||[], post_install_photos:s.post_install_photos||[], notes:s.notes||""};
@@ -416,8 +416,7 @@ function renderOverviewTab(s){
       <div><span class="lab">State / Region</span><input data-f="state_region" value="${esc(s.state_region)}"></div></div>
     <div class="row2 mb"><div><span class="lab">Contact person</span><input data-f="contact_person" value="${esc(s.contact_person)}"></div>
       <div><span class="lab">Phone number</span><input data-f="phone_number" value="${esc(s.phone_number)}"></div></div>
-    <div class="row2 mb"><div><span class="lab">Lease term <small>(free text, as agreed)</small></span><input data-f="lease_term" value="${esc(s.lease_term)}"></div>
-      <div><span class="lab">Stage</span><select data-f="stage">${STAGES.map(t=>`<option ${t===s.stage?'selected':''}>${t}</option>`).join("")}</select></div></div>
+    <div class="mb"><span class="lab">Stage</span><select data-f="stage">${STAGES.map(t=>`<option ${t===s.stage?'selected':''}>${t}</option>`).join("")}</select></div>
     <div class="row2 mb"><div><span class="lab">Site survey date</span><input type="date" data-f="survey_date" value="${s.survey_date||''}"></div>
       <div><span class="lab">Installation start date</span><input type="date" data-f="install_start_date" value="${s.install_start_date||''}"></div></div>
     <div class="row2 mb"><div><span class="lab">Installation complete date</span><input type="date" data-f="install_complete_date" value="${s.install_complete_date||''}"></div>
@@ -617,7 +616,6 @@ function docHTML_SiteReport(s){
         <tr><td class="l">Installation complete</td><td class="l">${fmtDate(s.install_complete_date)||'—'}</td></tr>
         <tr><td class="l">Commissioning</td><td class="l">${fmtDate(s.commissioning_date)||'—'}</td></tr>
       </tbody></table>
-    ${s.lease_term?`<div style="margin-top:10px;font-size:11.5px"><b>Lease term:</b> ${esc(s.lease_term)}</div>`:''}
     ${s.notes?`<div style="margin-top:6px;font-size:11.5px"><b>Notes:</b> ${esc(s.notes)}</div>`:''}
     ${photoBlock(s.pre_install_photos,"Pre-Installation Photos")}
     ${photoBlock(s.post_install_photos,"Post-Installation Photos")}
@@ -646,7 +644,7 @@ function docHTML_SitesSummary(){
     const openC=complaints.filter(c=>c.site_id===s.id && c.status!=="Resolved").length;
     const upcoming=maintenance.filter(m=>m.site_id===s.id && m.next_visit_due).slice().sort((a,b)=>(a.next_visit_due||"").localeCompare(b.next_visit_due||""))[0];
     return `<tr><td class="c">${i+1}</td><td class="l">${esc(s.site_no)}</td>
-      <td class="l">${esc(s.shop_location)||'—'}${s.lease_term?`<div style="font-size:9px;color:#8392a5;font-weight:600">${esc(s.lease_term)}</div>`:''}</td>
+      <td class="l">${esc(s.shop_location)||'—'}</td>
       <td class="l">${esc(s.state_region)||'—'}</td><td class="l">${esc(s.contact_person)||'—'}</td><td class="l">${esc(s.phone_number)||'—'}</td>
       <td class="c">${esc(s.stage)}</td><td class="c">${openC||'—'}</td><td class="c">${upcoming?fmtDate(upcoming.next_visit_due):'—'}</td></tr>`;
   }).join("");
