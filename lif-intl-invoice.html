@@ -286,13 +286,11 @@ United Kingdom</textarea></div>
           <div><span class="lab">Sort code <small>(UK, optional)</small></span><input type="text" id="sortCode" placeholder="if applicable"></div>
         </div>
         <div><span class="lab">Routing / ABA number <small>(US, optional)</small></span><input type="text" id="routingNumber" placeholder="if applicable"></div>
-        <label class="chkrow" style="margin-top:12px"><input type="checkbox" id="useIntermediary"> Include intermediary / correspondent bank</label>
-        <div id="intermediaryBlock" style="display:none">
-          <div class="mb"><span class="lab">Intermediary bank name</span><input type="text" id="intBankName"></div>
-          <div class="row2 mb">
-            <div><span class="lab">Intermediary SWIFT / BIC</span><input type="text" id="intSwift"></div>
-            <div><span class="lab">Intermediary account no.</span><input type="text" id="intAccount"></div>
-          </div>
+        <h2 style="margin-top:14px">Intermediary / correspondent bank <small style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)">(optional — only prints if filled in)</small></h2>
+        <div class="mb"><span class="lab">Intermediary bank name</span><input type="text" id="intBankName" placeholder="e.g. Citibank N.A., New York"></div>
+        <div class="row2 mb">
+          <div><span class="lab">Intermediary SWIFT / BIC</span><input type="text" id="intSwift" placeholder="e.g. CITIUS33"></div>
+          <div><span class="lab">Intermediary account no. <small>(optional)</small></span><input type="text" id="intAccount"></div>
         </div>
         <div style="margin-top:12px"><span class="lab">Payment reference note <small>(use {invoiceNo} and {poNumber} as placeholders)</small></span>
           <textarea id="refNote" style="min-height:66px">Please quote invoice number {invoiceNo} and PO number {poNumber} as payment reference. Unless otherwise agreed, bank charges outside Nigeria are payable by the remitter.</textarea></div>
@@ -498,10 +496,6 @@ $("signFile").addEventListener("change",e=>{
 });
 $("clearSig").addEventListener("click",()=>{ $("signFile").value=""; applyCustomSig(""); });
 
-$("useIntermediary").addEventListener("change",e=>{
-  $("intermediaryBlock").style.display=e.target.checked?"block":"none";
-  calc(); queueAutosave();
-});
 
 /* ============ SUPABASE DATA LAYER ============ */
 let SB=null, synced=false, saveTimer=null, currentUserEmail="";
@@ -527,7 +521,7 @@ function rowToInvoice(r){
     beneficiaryName:r.beneficiary_name||"", beneficiaryAddr:r.beneficiary_addr||"",
     bankName:r.bank_name||"", bankAddr:r.bank_addr||"", accountNumber:r.account_number||"", iban:r.iban||"",
     swiftBic:r.swift_bic||"", sortCode:r.sort_code||"", routingNumber:r.routing_number||"",
-    useIntermediary:!!r.use_intermediary, intBankName:r.int_bank_name||"", intSwift:r.int_swift||"", intAccount:r.int_account||"",
+    intBankName:r.int_bank_name||"", intSwift:r.int_swift||"", intAccount:r.int_account||"",
     refNote:r.ref_note||"", notes:r.notes||"", footerNote:r.footer_note||"", status:r.status||"draft",
     signName:r.sign_name||"", signTitle:r.sign_title||"", signature:r.signature||""};
 }
@@ -542,7 +536,7 @@ function formToRow(){
     beneficiary_name:val("beneficiaryName"), beneficiary_addr:val("beneficiaryAddr"),
     bank_name:val("bankName"), bank_addr:val("bankAddr"), account_number:val("accountNumber"), iban:val("iban"),
     swift_bic:val("swiftBic"), sort_code:val("sortCode"), routing_number:val("routingNumber"),
-    use_intermediary:$("useIntermediary").checked, int_bank_name:val("intBankName"), int_swift:val("intSwift"), int_account:val("intAccount"),
+    use_intermediary:!!(val("intBankName")||val("intSwift")||val("intAccount")), int_bank_name:val("intBankName"), int_swift:val("intSwift"), int_account:val("intAccount"),
     ref_note:val("refNote"), notes:val("notes"), footer_note:val("footerNote"),
     sign_name:val("signName"), sign_title:val("signTitle"), signature:customSig};
 }
@@ -562,7 +556,6 @@ function loadInvoiceIntoForm(inv){
   $("bankName").value=inv.bankName||""; $("bankAddr").value=inv.bankAddr||"";
   $("accountNumber").value=inv.accountNumber||""; $("iban").value=inv.iban||"";
   $("swiftBic").value=inv.swiftBic||""; $("sortCode").value=inv.sortCode||""; $("routingNumber").value=inv.routingNumber||"";
-  $("useIntermediary").checked=!!inv.useIntermediary; $("intermediaryBlock").style.display=inv.useIntermediary?"block":"none";
   $("intBankName").value=inv.intBankName||""; $("intSwift").value=inv.intSwift||""; $("intAccount").value=inv.intAccount||"";
   $("refNote").value=inv.refNote||"Please quote invoice number {invoiceNo} and PO number {poNumber} as payment reference. Unless otherwise agreed, bank charges outside Nigeria are payable by the remitter.";
   $("notes").value=inv.notes||"";
@@ -712,7 +705,6 @@ async function newInvoice(){
   $("beneficiaryName").value="Kiru Energy Ltd"; $("beneficiaryAddr").value="44 Bourdillon Road, Ikoyi, Lagos, Nigeria";
   $("bankName").value=""; $("bankAddr").value=""; $("accountNumber").value=""; $("iban").value="";
   $("swiftBic").value=""; $("sortCode").value=""; $("routingNumber").value="";
-  $("useIntermediary").checked=false; $("intermediaryBlock").style.display="none";
   $("intBankName").value=""; $("intSwift").value=""; $("intAccount").value="";
   $("refNote").value="Please quote invoice number {invoiceNo} and PO number {poNumber} as payment reference. Unless otherwise agreed, bank charges outside Nigeria are payable by the remitter.";
   $("notes").value="";
@@ -816,7 +808,7 @@ function calc(){
   $("pv_swift").textContent=val("swiftBic")||"—";
   $("pv_sortrow").style.display=val("sortCode")?"flex":"none"; $("pv_sort").textContent=val("sortCode");
   $("pv_routingrow").style.display=val("routingNumber")?"flex":"none"; $("pv_routing").textContent=val("routingNumber");
-  if($("useIntermediary").checked && (val("intBankName")||val("intSwift")||val("intAccount"))){
+  if(val("intBankName")||val("intSwift")||val("intAccount")){
     $("pv_intermBlock").style.display="block";
     $("pv_intname").textContent=val("intBankName")||"—";
     $("pv_intswift").textContent=val("intSwift")||"—";
