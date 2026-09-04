@@ -1009,6 +1009,12 @@ create table if not exists public.lif_intl_invoices (
   due_date         date,
   currency         text not null default 'GBP',
   payment_terms    text default 'Due upon receipt',
+  doc_title        text not null default 'INVOICE',
+  company_name     text default 'Kiru Energy Ltd',
+  company_reg      text default 'RC 1619891',
+  company_addr     text default '44 Bourdillon Road, Ikoyi, Lagos, Nigeria',
+  company_email    text default 'Business@ourkiru.com',
+  company_phone    text default '+234-813-026-6232',
   supplier_id      text default '',
   po_number        text default '',
   tax_id           text default '',
@@ -1031,6 +1037,7 @@ create table if not exists public.lif_intl_invoices (
   int_swift        text default '',
   int_account      text default '',
   notes            text default '',
+  footer_note      text default 'Kiru Energy Ltd is registered in Nigeria (RC 1619891) · www.ourkiru.com',
   sign_name        text default 'Benedict Okpala',
   sign_title       text default 'Director',
   signature        text default '',
@@ -1040,6 +1047,14 @@ create table if not exists public.lif_intl_invoices (
   created_at       timestamptz default now(),
   updated_at       timestamptz default now()
 );
+
+alter table public.lif_intl_invoices add column if not exists doc_title     text not null default 'INVOICE';
+alter table public.lif_intl_invoices add column if not exists company_name  text default 'Kiru Energy Ltd';
+alter table public.lif_intl_invoices add column if not exists company_reg   text default 'RC 1619891';
+alter table public.lif_intl_invoices add column if not exists company_addr text default '44 Bourdillon Road, Ikoyi, Lagos, Nigeria';
+alter table public.lif_intl_invoices add column if not exists company_email text default 'Business@ourkiru.com';
+alter table public.lif_intl_invoices add column if not exists company_phone text default '+234-813-026-6232';
+alter table public.lif_intl_invoices add column if not exists footer_note   text default 'Kiru Energy Ltd is registered in Nigeria (RC 1619891) · www.ourkiru.com';
 
 create index if not exists lif_intl_invoices_status_idx on public.lif_intl_invoices (status, created_at desc);
 
