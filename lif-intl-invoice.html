@@ -274,7 +274,6 @@ United Kingdom</textarea></div>
       <div class="sec">
         <h2>Payment / bank details</h2>
         <div class="mb"><span class="lab">Beneficiary name</span><input type="text" id="beneficiaryName" value="Kiru Energy Ltd"></div>
-        <div class="mb"><span class="lab">Beneficiary address</span><textarea id="beneficiaryAddr" style="min-height:56px">44 Bourdillon Road, Ikoyi, Lagos, Nigeria</textarea></div>
         <div class="mb"><span class="lab">Bank name</span><input type="text" id="bankName" placeholder="e.g. Wema Bank Plc"></div>
         <div class="mb"><span class="lab">Bank address</span><textarea id="bankAddr" style="min-height:56px" placeholder="Branch address, city, country"></textarea></div>
         <div class="row2 mb">
@@ -373,8 +372,7 @@ United Kingdom</textarea></div>
             <div class="kv" id="pv_sortrow"><span class="k">Sort code</span><span class="v" id="pv_sort"></span></div>
             <div class="kv" id="pv_routingrow"><span class="k">Routing / ABA no.</span><span class="v" id="pv_routing"></span></div>
           </div>
-          <div style="margin-top:8px;font-size:11.5px;color:#56657a"><b>Beneficiary address:</b> <span id="pv_benaddr"></span></div>
-          <div style="margin-top:4px;font-size:11.5px;color:#56657a"><b>Bank address:</b> <span id="pv_bankaddr"></span></div>
+          <div style="margin-top:8px;font-size:11.5px;color:#56657a"><b>Bank address:</b> <span id="pv_bankaddr"></span></div>
           <div class="pv-interm" id="pv_intermBlock" style="display:none">
             <div class="h2">Intermediary / correspondent bank</div>
             <div class="bgrid">
@@ -518,7 +516,7 @@ function rowToInvoice(r){
     supplierId:r.supplier_id||"", poNumber:r.po_number||"", taxId:r.tax_id||"",
     billName:r.bill_name||"", billOrg:r.bill_org||"", billAddr:r.bill_addr||"",
     lineItems: Array.isArray(r.line_items)?r.line_items:[],
-    beneficiaryName:r.beneficiary_name||"", beneficiaryAddr:r.beneficiary_addr||"",
+    beneficiaryName:r.beneficiary_name||"",
     bankName:r.bank_name||"", bankAddr:r.bank_addr||"", accountNumber:r.account_number||"", iban:r.iban||"",
     swiftBic:r.swift_bic||"", sortCode:r.sort_code||"", routingNumber:r.routing_number||"",
     intBankName:r.int_bank_name||"", intSwift:r.int_swift||"", intAccount:r.int_account||"",
@@ -533,7 +531,7 @@ function formToRow(){
     supplier_id:val("supplierId"), po_number:val("poNumber"), tax_id:val("taxId"),
     bill_name:val("billName"), bill_org:val("billOrg"), bill_addr:val("billAddr"),
     line_items:lineItems, total_amt:grandTotal,
-    beneficiary_name:val("beneficiaryName"), beneficiary_addr:val("beneficiaryAddr"),
+    beneficiary_name:val("beneficiaryName"),
     bank_name:val("bankName"), bank_addr:val("bankAddr"), account_number:val("accountNumber"), iban:val("iban"),
     swift_bic:val("swiftBic"), sort_code:val("sortCode"), routing_number:val("routingNumber"),
     use_intermediary:!!(val("intBankName")||val("intSwift")||val("intAccount")), int_bank_name:val("intBankName"), int_swift:val("intSwift"), int_account:val("intAccount"),
@@ -552,7 +550,6 @@ function loadInvoiceIntoForm(inv){
   $("billName").value=inv.billName||""; $("billOrg").value=inv.billOrg||""; $("billAddr").value=inv.billAddr||"";
   lineItems = inv.lineItems && inv.lineItems.length ? inv.lineItems.map(x=>({desc:x.desc||"",amount:x.amount||0})) : [];
   $("beneficiaryName").value=inv.beneficiaryName||"Kiru Energy Ltd";
-  $("beneficiaryAddr").value=inv.beneficiaryAddr||"44 Bourdillon Road, Ikoyi, Lagos, Nigeria";
   $("bankName").value=inv.bankName||""; $("bankAddr").value=inv.bankAddr||"";
   $("accountNumber").value=inv.accountNumber||""; $("iban").value=inv.iban||"";
   $("swiftBic").value=inv.swiftBic||""; $("sortCode").value=inv.sortCode||""; $("routingNumber").value=inv.routingNumber||"";
@@ -702,7 +699,7 @@ async function newInvoice(){
   $("billName").value="Paul McKinney"; $("billOrg").value="Carbon Trust";
   $("billAddr").value="Level 5, Arbor\n255 Blackfriars Road\nLondon SE1 9AX\nUnited Kingdom";
   lineItems=[{desc:"LIF Project — Approved Claim Amount",amount:0}];
-  $("beneficiaryName").value="Kiru Energy Ltd"; $("beneficiaryAddr").value="44 Bourdillon Road, Ikoyi, Lagos, Nigeria";
+  $("beneficiaryName").value="Kiru Energy Ltd";
   $("bankName").value=""; $("bankAddr").value=""; $("accountNumber").value=""; $("iban").value="";
   $("swiftBic").value=""; $("sortCode").value=""; $("routingNumber").value="";
   $("intBankName").value=""; $("intSwift").value=""; $("intAccount").value="";
@@ -800,7 +797,6 @@ function calc(){
   if(val("taxId")){ $("pv_taxrow").style.display="flex"; $("pv_taxid").textContent=val("taxId"); } else { $("pv_taxrow").style.display="none"; }
 
   $("pv_benname").textContent=val("beneficiaryName")||"—";
-  $("pv_benaddr").textContent=val("beneficiaryAddr")||"—";
   $("pv_bankname").textContent=val("bankName")||"—";
   $("pv_bankaddr").textContent=val("bankAddr")||"—";
   $("pv_acctno").textContent=val("accountNumber")||"—";
@@ -833,7 +829,7 @@ function calc(){
 $("newNo").addEventListener("click",async()=>{$("invNo").value= synced ? await genNoRemote() : genNo(); calc(); queueAutosave();});
 ["invNo","invDate","dueDate","currency","paymentTerms","docTitle","companyName","companyReg","companyPhone","companyEmail","companyAddr",
  "supplierId","poNumber","taxId","billName","billOrg","billAddr",
- "beneficiaryName","beneficiaryAddr","bankName","bankAddr","accountNumber","iban","swiftBic","sortCode","routingNumber",
+ "beneficiaryName","bankName","bankAddr","accountNumber","iban","swiftBic","sortCode","routingNumber",
  "intBankName","intSwift","intAccount","refNote","notes","footerNote","signName","signTitle"]
   .forEach(id=>$(id).addEventListener("input",()=>{calc(); queueAutosave();}));
 $("newInvBtn").addEventListener("click",handleNewInvoiceClick);
