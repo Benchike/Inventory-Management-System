@@ -1,0 +1,1 @@
+alter table public.lif_intl_invoices add column if not exists ref_note text default 'Please quote invoice number {invoiceNo} and PO number {poNumber} as payment reference. Unless otherwise agreed, bank charges outside Nigeria are payable by the remitter.';

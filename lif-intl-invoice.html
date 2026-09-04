@@ -154,7 +154,7 @@ window.KIRU_CONFIG = {
   .pv-pay .bgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px 22px}
   .pv-pay .kv{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12px;border-bottom:1px dashed #e3e9f1}
   .pv-pay .kv .k{color:#56657a}.pv-pay .kv .v{font-weight:700;text-align:right}
-  .pv-pay .refnote{margin-top:10px;font-size:10.5px;color:#56657a;line-height:1.6;font-style:italic}
+  .pv-pay .refnote{margin-top:10px;font-size:10.5px;color:#56657a;line-height:1.6;font-style:italic;white-space:pre-line}
   .pv-interm{margin-top:12px;padding-top:12px;border-top:1px solid #dfe6ee}
   .pv-interm .h2{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;color:#8392a5;font-weight:800;margin-bottom:7px}
   .pv-bottom{display:flex;justify-content:space-between;gap:24px;margin-top:30px;padding-top:20px;border-top:1px solid #eaeef4}
@@ -294,6 +294,8 @@ United Kingdom</textarea></div>
             <div><span class="lab">Intermediary account no.</span><input type="text" id="intAccount"></div>
           </div>
         </div>
+        <div style="margin-top:12px"><span class="lab">Payment reference note <small>(use {invoiceNo} and {poNumber} as placeholders)</small></span>
+          <textarea id="refNote" style="min-height:66px">Please quote invoice number {invoiceNo} and PO number {poNumber} as payment reference. Unless otherwise agreed, bank charges outside Nigeria are payable by the remitter.</textarea></div>
       </div>
 
       <div class="sec">
@@ -383,7 +385,7 @@ United Kingdom</textarea></div>
               <div class="kv"><span class="k">Account no.</span><span class="v" id="pv_intacct"></span></div>
             </div>
           </div>
-          <div class="refnote">Please quote invoice number <b id="pv_refno"></b> and PO number <b id="pv_refpo"></b> as payment reference. Unless otherwise agreed, bank charges outside Nigeria are payable by the remitter.</div>
+          <div class="refnote" id="pv_refnote"></div>
         </div>
 
         <div class="pv-bottom">
@@ -526,7 +528,7 @@ function rowToInvoice(r){
     bankName:r.bank_name||"", bankAddr:r.bank_addr||"", accountNumber:r.account_number||"", iban:r.iban||"",
     swiftBic:r.swift_bic||"", sortCode:r.sort_code||"", routingNumber:r.routing_number||"",
     useIntermediary:!!r.use_intermediary, intBankName:r.int_bank_name||"", intSwift:r.int_swift||"", intAccount:r.int_account||"",
-    notes:r.notes||"", footerNote:r.footer_note||"", status:r.status||"draft",
+    refNote:r.ref_note||"", notes:r.notes||"", footerNote:r.footer_note||"", status:r.status||"draft",
     signName:r.sign_name||"", signTitle:r.sign_title||"", signature:r.signature||""};
 }
 function formToRow(){
@@ -541,7 +543,7 @@ function formToRow(){
     bank_name:val("bankName"), bank_addr:val("bankAddr"), account_number:val("accountNumber"), iban:val("iban"),
     swift_bic:val("swiftBic"), sort_code:val("sortCode"), routing_number:val("routingNumber"),
     use_intermediary:$("useIntermediary").checked, int_bank_name:val("intBankName"), int_swift:val("intSwift"), int_account:val("intAccount"),
-    notes:val("notes"), footer_note:val("footerNote"),
+    ref_note:val("refNote"), notes:val("notes"), footer_note:val("footerNote"),
     sign_name:val("signName"), sign_title:val("signTitle"), signature:customSig};
 }
 function loadInvoiceIntoForm(inv){
@@ -562,6 +564,7 @@ function loadInvoiceIntoForm(inv){
   $("swiftBic").value=inv.swiftBic||""; $("sortCode").value=inv.sortCode||""; $("routingNumber").value=inv.routingNumber||"";
   $("useIntermediary").checked=!!inv.useIntermediary; $("intermediaryBlock").style.display=inv.useIntermediary?"block":"none";
   $("intBankName").value=inv.intBankName||""; $("intSwift").value=inv.intSwift||""; $("intAccount").value=inv.intAccount||"";
+  $("refNote").value=inv.refNote||"Please quote invoice number {invoiceNo} and PO number {poNumber} as payment reference. Unless otherwise agreed, bank charges outside Nigeria are payable by the remitter.";
   $("notes").value=inv.notes||"";
   $("footerNote").value=inv.footerNote||"Kiru Energy Ltd is registered in Nigeria (RC 1619891) · www.ourkiru.com";
   $("signName").value=inv.signName||"Benedict Okpala";
@@ -711,6 +714,7 @@ async function newInvoice(){
   $("swiftBic").value=""; $("sortCode").value=""; $("routingNumber").value="";
   $("useIntermediary").checked=false; $("intermediaryBlock").style.display="none";
   $("intBankName").value=""; $("intSwift").value=""; $("intAccount").value="";
+  $("refNote").value="Please quote invoice number {invoiceNo} and PO number {poNumber} as payment reference. Unless otherwise agreed, bank charges outside Nigeria are payable by the remitter.";
   $("notes").value="";
   $("footerNote").value="Kiru Energy Ltd is registered in Nigeria (RC 1619891) · www.ourkiru.com";
   $("signName").value="Benedict Okpala"; $("signTitle").value="Director";
@@ -818,8 +822,12 @@ function calc(){
     $("pv_intswift").textContent=val("intSwift")||"—";
     $("pv_intacct").textContent=val("intAccount")||"—";
   } else { $("pv_intermBlock").style.display="none"; }
-  $("pv_refno").textContent=val("invNo")||"—";
-  $("pv_refpo").textContent=val("poNumber")||"—";
+  {
+    let tpl=esc(val("refNote"));
+    tpl=tpl.replace(/\{invoiceNo\}/g,"<b>"+esc(val("invNo")||"—")+"</b>");
+    tpl=tpl.replace(/\{poNumber\}/g,"<b>"+esc(val("poNumber")||"—")+"</b>");
+    $("pv_refnote").innerHTML=tpl;
+  }
 
   $("pv_notes").textContent=val("notes")||"";
   $("pv_signName").firstChild.textContent=val("signName")||"—";
@@ -834,7 +842,7 @@ $("newNo").addEventListener("click",async()=>{$("invNo").value= synced ? await g
 ["invNo","invDate","dueDate","currency","paymentTerms","docTitle","companyName","companyReg","companyPhone","companyEmail","companyAddr",
  "supplierId","poNumber","taxId","billName","billOrg","billAddr",
  "beneficiaryName","beneficiaryAddr","bankName","bankAddr","accountNumber","iban","swiftBic","sortCode","routingNumber",
- "intBankName","intSwift","intAccount","notes","footerNote","signName","signTitle"]
+ "intBankName","intSwift","intAccount","refNote","notes","footerNote","signName","signTitle"]
   .forEach(id=>$(id).addEventListener("input",()=>{calc(); queueAutosave();}));
 $("newInvBtn").addEventListener("click",handleNewInvoiceClick);
 $("newInvBtn2").addEventListener("click",handleNewInvoiceClick);

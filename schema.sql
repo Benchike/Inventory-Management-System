@@ -1036,6 +1036,7 @@ create table if not exists public.lif_intl_invoices (
   int_bank_name    text default '',
   int_swift        text default '',
   int_account      text default '',
+  ref_note         text default 'Please quote invoice number {invoiceNo} and PO number {poNumber} as payment reference. Unless otherwise agreed, bank charges outside Nigeria are payable by the remitter.',
   notes            text default '',
   footer_note      text default 'Kiru Energy Ltd is registered in Nigeria (RC 1619891) · www.ourkiru.com',
   sign_name        text default 'Benedict Okpala',
@@ -1055,6 +1056,7 @@ alter table public.lif_intl_invoices add column if not exists company_addr text 
 alter table public.lif_intl_invoices add column if not exists company_email text default 'Business@ourkiru.com';
 alter table public.lif_intl_invoices add column if not exists company_phone text default '+234-813-026-6232';
 alter table public.lif_intl_invoices add column if not exists footer_note   text default 'Kiru Energy Ltd is registered in Nigeria (RC 1619891) · www.ourkiru.com';
+alter table public.lif_intl_invoices add column if not exists ref_note      text default 'Please quote invoice number {invoiceNo} and PO number {poNumber} as payment reference. Unless otherwise agreed, bank charges outside Nigeria are payable by the remitter.';
 
 create index if not exists lif_intl_invoices_status_idx on public.lif_intl_invoices (status, created_at desc);
 

@@ -32,6 +32,7 @@ create table if not exists public.lif_intl_invoices (
   int_bank_name    text default '',
   int_swift        text default '',
   int_account      text default '',
+  ref_note         text default 'Please quote invoice number {invoiceNo} and PO number {poNumber} as payment reference. Unless otherwise agreed, bank charges outside Nigeria are payable by the remitter.',
   notes            text default '',
   footer_note      text default 'Kiru Energy Ltd is registered in Nigeria (RC 1619891) · www.ourkiru.com',
   sign_name        text default 'Benedict Okpala',
