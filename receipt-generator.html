@@ -74,10 +74,10 @@ window.KIRU_CONFIG = {
   .minibtn{font-family:inherit;font-size:.74rem;font-weight:700;color:var(--blue-deep);cursor:pointer;background:var(--soft);
     border:1px solid var(--line);border-radius:9px;padding:0 12px;white-space:nowrap;transition:.16s}
   .minibtn:hover{border-color:var(--blue)}
-  .itemhead{display:grid;grid-template-columns:96px 1fr 74px 96px;gap:7px;margin-bottom:6px}
+  .itemhead{display:grid;grid-template-columns:96px 1fr 84px;gap:7px;margin-bottom:6px}
   .itemhead span{font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
-  .itemhead span:nth-child(3),.itemhead span:nth-child(4){text-align:right}
-  .addrow{display:grid;grid-template-columns:96px 1fr 74px 96px;gap:7px;align-items:center;margin-bottom:8px}
+  .itemhead span:nth-child(3){text-align:right}
+  .addrow{display:grid;grid-template-columns:96px 1fr 84px;gap:7px;align-items:center;margin-bottom:8px}
   .addrow input{padding:9px 9px}
   .addrow .num{text-align:right}
   .addrow .catlab{font-size:.78rem;font-weight:700;color:var(--text)}
@@ -233,9 +233,10 @@ window.KIRU_CONFIG = {
 
       <div class="sec">
         <h2>System specification</h2>
-        <div class="itemhead"><span>Component</span><span>Description</span><span>Warranty (mo.)</span><span>Price (₦)</span></div>
+        <div class="itemhead"><span>Component</span><span>Description</span><span>Warranty (mo.)</span></div>
         <div id="sysItems"></div>
-        <div class="totalbar"><span class="l">Total system price</span><span class="v" id="formTotal">₦0</span></div>
+        <div class="mb" style="margin-top:10px"><span class="lab">Total system price (₦)</span>
+          <input type="text" inputmode="numeric" id="sysTotal" style="font-size:1.1rem;font-weight:800;padding:11px" placeholder="0"></div>
       </div>
 
       <div class="sec">
@@ -305,7 +306,7 @@ window.KIRU_CONFIG = {
         </div>
 
         <table class="items">
-          <thead><tr><th>Component</th><th>Description</th><th>Warranty</th><th>Price</th></tr></thead>
+          <thead><tr><th>Component</th><th>Description</th><th>Warranty</th></tr></thead>
           <tbody id="pv_items"></tbody>
         </table>
 
@@ -452,7 +453,7 @@ const SYS_CATEGORIES=[
   {key:"bos",label:"Balance of System (BOS)"},
   {key:"workmanship",label:"Workmanship"}
 ];
-let items=SYS_CATEGORIES.map(c=>({cat:c.key,desc:"",warranty:"",price:0}));
+let items=SYS_CATEGORIES.map(c=>({cat:c.key,desc:"",warranty:""}));
 let paidTouched=false;
 function renderItems(){
   const c=$("sysItems"); c.innerHTML="";
@@ -461,30 +462,27 @@ function renderItems(){
     const r=document.createElement("div"); r.className="addrow";
     r.innerHTML=`<div class="catlab">${cat.label}</div>
       <input type="text" data-i="${i}" data-k="desc" value="${(it.desc||'').replace(/"/g,'&quot;')}" placeholder="Spec / brand / capacity">
-      <input class="num" type="text" inputmode="numeric" data-i="${i}" data-k="warranty" value="${(it.warranty||'').toString().replace(/"/g,'&quot;')}" placeholder="mo.">
-      <input class="num" type="text" inputmode="numeric" data-i="${i}" data-k="price" value="${it.price?Number(it.price).toLocaleString('en-US'):''}" placeholder="0">`;
+      <input class="num" type="text" inputmode="numeric" data-i="${i}" data-k="warranty" value="${(it.warranty||'').toString().replace(/"/g,'&quot;')}" placeholder="mo.">`;
     c.appendChild(r);
   });
   c.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",e=>{
     const i=+e.target.dataset.i,k=e.target.dataset.k;
-    if(k==="price"){fmtCommasEl(e.target); items[i][k]=parseFloat(e.target.value.replace(/,/g,""))||0;}
-    else items[i][k]=e.target.value;
+    items[i][k]=e.target.value;
     calc(); queueAutosave();
   }));
 }
 
 function calc(){
-  let body="",total=0;
+  let body="";
   items.forEach((it,i)=>{
     const cat=SYS_CATEGORIES[i];
-    const price=Number(it.price)||0;
-    total+=price;
     const warr=(it.warranty||"").toString().trim();
-    if((it.desc||"").trim()||price||warr)
-      body+=`<tr><td><span class="d">${cat.label}</span></td><td>${(it.desc||'').replace(/</g,'&lt;')||'&mdash;'}</td><td>${warr?esc(warr)+' mo.':'—'}</td><td>${ngn.format(price)}</td></tr>`;
+    if((it.desc||"").trim()||warr)
+      body+=`<tr><td><span class="d">${cat.label}</span></td><td>${(it.desc||'').replace(/</g,'&lt;')||'&mdash;'}</td><td>${warr?esc(warr)+' mo.':'—'}</td></tr>`;
   });
-  if(!body) body='<tr><td style="color:#b8c2d0;font-style:italic">No system components added yet</td><td></td><td></td><td></td></tr>';
+  if(!body) body='<tr><td style="color:#b8c2d0;font-style:italic">No system components added yet</td><td></td><td></td></tr>';
   $("pv_items").innerHTML=body;
+  const total=parseFloat(($("sysTotal").value||"").replace(/,/g,""))||0;
   currentTotal=total;
 
   // amount received: default to total unless user edited
@@ -492,7 +490,6 @@ function calc(){
   const paid=parseFloat(($("amtPaid").value||"").replace(/,/g,""))||0;
   const bal=total-paid;
 
-  $("formTotal").textContent=ngn.format(total);
   $("pv_total").textContent=ngn.format(total);
   $("pv_recd").textContent=ngn.format(paid);
   $("pv_no").innerHTML="<b>No:</b> "+(val("rcNo")||"—");
@@ -551,7 +548,7 @@ function setSyncBanner(msg,ok){
 function rowToReceipt(r){
   return {_id:r.id, rcNo:r.rc_no||"", rcDate:r.rc_date||"",
     clientName:r.client_name||"", clientAddr:r.client_addr||"",
-    items: Array.isArray(r.items)?r.items:[],
+    items: Array.isArray(r.items)?r.items:[], totalAmt:r.total_amt||0,
     payMethod:r.pay_method||"Bank Transfer", payRef:r.pay_ref||"", amountPaid:r.amount_paid||0,
     signName:r.sign_name||"Benedict Okpala", signTitle:r.sign_title||"Director", signature:r.signature||"",
     receiptType:r.receipt_type||"full", balDueFrom:r.balance_due_date||"", balDueTo:r.balance_due_date_to||"",
@@ -573,8 +570,9 @@ function loadReceiptIntoForm(rec){
   $("clientName").value=rec.clientName; $("clientAddr").value=rec.clientAddr;
   items = SYS_CATEGORIES.map(c=>{
     const found=(rec.items||[]).find(x=>x.cat===c.key);
-    return {cat:c.key, desc:found?(found.desc||""):"", warranty:found?(found.warranty||""):"", price:found?(found.price||0):0};
+    return {cat:c.key, desc:found?(found.desc||""):"", warranty:found?(found.warranty||""):""};
   });
+  $("sysTotal").value = rec.totalAmt ? Number(rec.totalAmt).toLocaleString("en-US") : "";
   $("payMethod").value=rec.payMethod; $("payRef").value=rec.payRef;
   $("signName").value=rec.signName||"Benedict Okpala"; $("signTitle").value=rec.signTitle||"Director";
   customSig=rec.signature||"";
@@ -684,7 +682,8 @@ async function newReceipt(){
   $("rcDate").value=new Date().toISOString().slice(0,10);
   $("clientName").value="Customer name";
   $("clientAddr").value="Address, City";
-  items=SYS_CATEGORIES.map(c=>({cat:c.key,desc:"",warranty:"",price:0}));
+  items=SYS_CATEGORIES.map(c=>({cat:c.key,desc:"",warranty:""}));
+  $("sysTotal").value="";
   $("payMethod").value="Bank Transfer"; $("payRef").value="";
   $("signName").value="Benedict Okpala"; $("signTitle").value="Director";
   $("signFile").value=""; customSig="";
@@ -714,6 +713,7 @@ $("histSearch").addEventListener("input", applyHistSearch);
 $("newNo").addEventListener("click",async()=>{$("rcNo").value= synced ? await genNoRemote() : genNo(); calc(); queueAutosave();});
 ["rcNo","rcDate","clientName","clientAddr","payMethod","payRef","signName","signTitle","rcType","balDueFrom","balDueTo","balRangeChk","balTerms"].forEach(id=>$(id).addEventListener("input",()=>{calc();queueAutosave();}));
 $("amtPaid").addEventListener("input",e=>{paidTouched=true; fmtCommasEl(e.target); calc(); queueAutosave();});
+$("sysTotal").addEventListener("input",e=>{fmtCommasEl(e.target); calc(); queueAutosave();});
 renderItems(); calc();
 $("saveRc").addEventListener("click",saveReceipt);
 $("newRcBtn").addEventListener("click",handleNewReceiptClick);
