@@ -74,15 +74,13 @@ window.KIRU_CONFIG = {
   .minibtn{font-family:inherit;font-size:.74rem;font-weight:700;color:var(--blue-deep);cursor:pointer;background:var(--soft);
     border:1px solid var(--line);border-radius:9px;padding:0 12px;white-space:nowrap;transition:.16s}
   .minibtn:hover{border-color:var(--blue)}
-  .itemhead{display:grid;grid-template-columns:1fr 48px 96px 30px;gap:7px;margin-bottom:6px}
+  .itemhead{display:grid;grid-template-columns:96px 1fr 74px 96px;gap:7px;margin-bottom:6px}
   .itemhead span{font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
-  .itemhead span:nth-child(2),.itemhead span:nth-child(3){text-align:right}
-  .addrow{display:grid;grid-template-columns:1fr 48px 96px 30px;gap:7px;align-items:center;margin-bottom:8px}
+  .itemhead span:nth-child(3),.itemhead span:nth-child(4){text-align:right}
+  .addrow{display:grid;grid-template-columns:96px 1fr 74px 96px;gap:7px;align-items:center;margin-bottom:8px}
   .addrow input{padding:9px 9px}
   .addrow .num{text-align:right}
-  .delbtn{width:30px;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--soft);color:var(--muted);
-    cursor:pointer;display:grid;place-items:center;transition:.16s}
-  .delbtn:hover{border-color:#ff6b6b;color:#ff6b6b}.delbtn svg{width:14px;height:14px}
+  .addrow .catlab{font-size:.78rem;font-weight:700;color:var(--text)}
   .addbtn{font-family:inherit;font-size:.8rem;font-weight:700;color:var(--blue-deep);cursor:pointer;background:none;
     border:1px dashed var(--line);border-radius:9px;padding:9px;width:100%;transition:.16s;margin-top:2px}
   .addbtn:hover{border-color:var(--blue);background:var(--tag-bg)}
@@ -115,7 +113,8 @@ window.KIRU_CONFIG = {
   table.items{width:100%;border-collapse:collapse;margin-top:24px}
   table.items th{background:#021431;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;padding:10px 12px;text-align:right}
   table.items th:first-child,table.items td:first-child{text-align:left}
-  table.items th:nth-child(2),table.items td:nth-child(2){text-align:center}
+  table.items th:nth-child(2),table.items td:nth-child(2){text-align:left}
+  table.items th:nth-child(3),table.items td:nth-child(3){text-align:center}
   table.items td{padding:11px 12px;border-bottom:1px solid #eaeef4;font-size:12.5px;text-align:right;vertical-align:top}
   table.items td .d{font-weight:600}
   .pv-mid{display:flex;justify-content:space-between;gap:24px;margin-top:22px}
@@ -233,11 +232,10 @@ window.KIRU_CONFIG = {
       </div>
 
       <div class="sec">
-        <h2>Items / payment for</h2>
-        <div class="itemhead"><span>Item / description</span><span>Qty / Lot</span><span>Unit price (₦)</span><span></span></div>
-        <div id="addItems"></div>
-        <button class="addbtn" id="addItem">+ Add item</button>
-        <div class="totalbar"><span class="l">Total</span><span class="v" id="formTotal">₦0</span></div>
+        <h2>System specification</h2>
+        <div class="itemhead"><span>Component</span><span>Description</span><span>Warranty (mo.)</span><span>Price (₦)</span></div>
+        <div id="sysItems"></div>
+        <div class="totalbar"><span class="l">Total system price</span><span class="v" id="formTotal">₦0</span></div>
       </div>
 
       <div class="sec">
@@ -307,7 +305,7 @@ window.KIRU_CONFIG = {
         </div>
 
         <table class="items">
-          <thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Amount</th></tr></thead>
+          <thead><tr><th>Component</th><th>Description</th><th>Warranty</th><th>Price</th></tr></thead>
           <tbody id="pv_items"></tbody>
         </table>
 
@@ -447,47 +445,45 @@ $("signFile").addEventListener("change",e=>{
 $("clearSig").addEventListener("click",()=>{ $("signFile").value=""; applyCustomSig(""); });
 
 let currentTotal=0;
-let items=[
-  {desc:"Solar inverter 3.5kVA",qty:1,price:250000},
-  {desc:"Tubular battery 220Ah",qty:2,price:180000},
-  {desc:"Installation & accessories",qty:1,price:90000}
+const SYS_CATEGORIES=[
+  {key:"panels",label:"Solar Panels"},
+  {key:"inverter",label:"Inverter"},
+  {key:"battery",label:"Battery"},
+  {key:"bos",label:"Balance of System (BOS)"},
+  {key:"workmanship",label:"Workmanship"}
 ];
+let items=SYS_CATEGORIES.map(c=>({cat:c.key,desc:"",warranty:"",price:0}));
 let paidTouched=false;
 function renderItems(){
-  const c=$("addItems"); c.innerHTML="";
+  const c=$("sysItems"); c.innerHTML="";
   items.forEach((it,i)=>{
+    const cat=SYS_CATEGORIES[i];
     const r=document.createElement("div"); r.className="addrow";
-    r.innerHTML=`<input type="text" data-i="${i}" data-k="desc" value="${(it.desc||'').replace(/"/g,'&quot;')}" placeholder="Item / description">
-      <input class="num" type="text" data-i="${i}" data-k="qty" value="${it.qty}" placeholder="2 / Lot">
-      <input class="num" type="text" inputmode="numeric" data-i="${i}" data-k="price" value="${Number(it.price||0).toLocaleString('en-US')}">
-      <button class="delbtn" data-del="${i}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>`;
+    r.innerHTML=`<div class="catlab">${cat.label}</div>
+      <input type="text" data-i="${i}" data-k="desc" value="${(it.desc||'').replace(/"/g,'&quot;')}" placeholder="Spec / brand / capacity">
+      <input class="num" type="text" inputmode="numeric" data-i="${i}" data-k="warranty" value="${(it.warranty||'').toString().replace(/"/g,'&quot;')}" placeholder="mo.">
+      <input class="num" type="text" inputmode="numeric" data-i="${i}" data-k="price" value="${it.price?Number(it.price).toLocaleString('en-US'):''}" placeholder="0">`;
     c.appendChild(r);
   });
   c.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",e=>{
     const i=+e.target.dataset.i,k=e.target.dataset.k;
     if(k==="price"){fmtCommasEl(e.target); items[i][k]=parseFloat(e.target.value.replace(/,/g,""))||0;}
-    else if(k==="qty"){items[i][k]=e.target.value;}
     else items[i][k]=e.target.value;
     calc(); queueAutosave();
   }));
-  c.querySelectorAll(".delbtn").forEach(b=>b.addEventListener("click",()=>{items.splice(+b.dataset.del,1);renderItems();calc();queueAutosave();}));
 }
 
 function calc(){
   let body="",total=0;
-  items.forEach(it=>{
-    const raw=((it.qty===0||it.qty)?String(it.qty):"").trim();
-    const cleaned=raw.replace(/,/g,"");
-    const isNum=cleaned!=="" && /^[0-9]+(\.[0-9]+)?$/.test(cleaned);
-    let amt,qdisp;
-    if(isNum){ amt=parseFloat(cleaned)*(it.price||0); qdisp=parseFloat(cleaned); }
-    else if(raw===""){ amt=0; qdisp="0"; }
-    else { amt=(it.price||0); qdisp=raw; }
-    total+=amt;
-    if((it.desc||"").trim()||it.price)
-      body+=`<tr><td><span class="d">${(it.desc||'').replace(/</g,'&lt;')||'&mdash;'}</span></td><td>${qdisp}</td><td>${ngn.format(it.price||0)}</td><td>${ngn.format(amt)}</td></tr>`;
+  items.forEach((it,i)=>{
+    const cat=SYS_CATEGORIES[i];
+    const price=Number(it.price)||0;
+    total+=price;
+    const warr=(it.warranty||"").toString().trim();
+    if((it.desc||"").trim()||price||warr)
+      body+=`<tr><td><span class="d">${cat.label}</span></td><td>${(it.desc||'').replace(/</g,'&lt;')||'&mdash;'}</td><td>${warr?esc(warr)+' mo.':'—'}</td><td>${ngn.format(price)}</td></tr>`;
   });
-  if(!body) body='<tr><td style="color:#b8c2d0;font-style:italic">No items added yet</td><td></td><td></td><td></td></tr>';
+  if(!body) body='<tr><td style="color:#b8c2d0;font-style:italic">No system components added yet</td><td></td><td></td><td></td></tr>';
   $("pv_items").innerHTML=body;
   currentTotal=total;
 
@@ -575,7 +571,10 @@ function loadReceiptIntoForm(rec){
   curId=rec._id;
   $("rcNo").value=rec.rcNo; $("rcDate").value=rec.rcDate;
   $("clientName").value=rec.clientName; $("clientAddr").value=rec.clientAddr;
-  items = rec.items && rec.items.length ? rec.items.map(x=>({desc:x.desc||"",qty:(x.qty!==undefined?x.qty:1),price:x.price||0})) : [];
+  items = SYS_CATEGORIES.map(c=>{
+    const found=(rec.items||[]).find(x=>x.cat===c.key);
+    return {cat:c.key, desc:found?(found.desc||""):"", warranty:found?(found.warranty||""):"", price:found?(found.price||0):0};
+  });
   $("payMethod").value=rec.payMethod; $("payRef").value=rec.payRef;
   $("signName").value=rec.signName||"Benedict Okpala"; $("signTitle").value=rec.signTitle||"Director";
   customSig=rec.signature||"";
@@ -685,11 +684,7 @@ async function newReceipt(){
   $("rcDate").value=new Date().toISOString().slice(0,10);
   $("clientName").value="Customer name";
   $("clientAddr").value="Address, City";
-  items=[
-    {desc:"Solar inverter 3.5kVA",qty:1,price:250000},
-    {desc:"Tubular battery 220Ah",qty:2,price:180000},
-    {desc:"Installation & accessories",qty:1,price:90000}
-  ];
+  items=SYS_CATEGORIES.map(c=>({cat:c.key,desc:"",warranty:"",price:0}));
   $("payMethod").value="Bank Transfer"; $("payRef").value="";
   $("signName").value="Benedict Okpala"; $("signTitle").value="Director";
   $("signFile").value=""; customSig="";
@@ -720,7 +715,6 @@ $("newNo").addEventListener("click",async()=>{$("rcNo").value= synced ? await ge
 ["rcNo","rcDate","clientName","clientAddr","payMethod","payRef","signName","signTitle","rcType","balDueFrom","balDueTo","balRangeChk","balTerms"].forEach(id=>$(id).addEventListener("input",()=>{calc();queueAutosave();}));
 $("amtPaid").addEventListener("input",e=>{paidTouched=true; fmtCommasEl(e.target); calc(); queueAutosave();});
 renderItems(); calc();
-$("addItem").addEventListener("click",()=>{items.push({desc:"",qty:1,price:0});renderItems();calc();queueAutosave();});
 $("saveRc").addEventListener("click",saveReceipt);
 $("newRcBtn").addEventListener("click",handleNewReceiptClick);
 $("newRcBtn2").addEventListener("click",handleNewReceiptClick);
