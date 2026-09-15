@@ -233,7 +233,7 @@ window.KIRU_CONFIG = {
 
       <div class="sec">
         <h2>System specification</h2>
-        <div class="itemhead"><span>Component</span><span>Description</span><span>Warranty (mo.)</span></div>
+        <div class="itemhead"><span>Component</span><span>Description</span><span>Warranty (yrs)</span></div>
         <div id="sysItems"></div>
         <div class="mb" style="margin-top:10px"><span class="lab">Total system price (₦)</span>
           <input type="text" inputmode="numeric" id="sysTotal" style="font-size:1.1rem;font-weight:800;padding:11px" placeholder="0"></div>
@@ -462,7 +462,7 @@ function renderItems(){
     const r=document.createElement("div"); r.className="addrow";
     r.innerHTML=`<div class="catlab">${cat.label}</div>
       <input type="text" data-i="${i}" data-k="desc" value="${(it.desc||'').replace(/"/g,'&quot;')}" placeholder="Spec / brand / capacity">
-      <input class="num" type="text" inputmode="numeric" data-i="${i}" data-k="warranty" value="${(it.warranty||'').toString().replace(/"/g,'&quot;')}" placeholder="mo.">`;
+      <input class="num" type="text" inputmode="numeric" data-i="${i}" data-k="warranty" value="${(it.warranty||'').toString().replace(/"/g,'&quot;')}" placeholder="yrs">`;
     c.appendChild(r);
   });
   c.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",e=>{
@@ -478,7 +478,7 @@ function calc(){
     const cat=SYS_CATEGORIES[i];
     const warr=(it.warranty||"").toString().trim();
     if((it.desc||"").trim()||warr)
-      body+=`<tr><td><span class="d">${cat.label}</span></td><td>${(it.desc||'').replace(/</g,'&lt;')||'&mdash;'}</td><td>${warr?esc(warr)+' mo.':'—'}</td></tr>`;
+      body+=`<tr><td><span class="d">${cat.label}</span></td><td>${(it.desc||'').replace(/</g,'&lt;')||'&mdash;'}</td><td>${warr?esc(warr)+' yrs':'—'}</td></tr>`;
   });
   if(!body) body='<tr><td style="color:#b8c2d0;font-style:italic">No system components added yet</td><td></td><td></td></tr>';
   $("pv_items").innerHTML=body;
