@@ -261,7 +261,7 @@ window.KIRU_CONFIG = {
           </div>
           <div class="mb" id="balDueToWrap" style="display:none"><span class="lab">Due by <small>(end of range)</small></span><input type="date" id="balDueTo"></div>
           <span class="lab">Agreement terms <small>(printed on the receipt)</small></span>
-          <textarea id="balTerms" style="min-height:80px">The customer agrees to pay the outstanding balance stated above within the period indicated. Kiru Energy Ltd reserves the right to withhold further goods, services, or installation until the balance is settled in full.</textarea>
+          <textarea id="balTerms" style="min-height:80px">The customer agrees to pay the outstanding balance stated above within the period indicated. Where the customer violates this agreement, Kiru Energy Ltd reserves the right to recover the installed equipment, in addition to any other remedy available to it.</textarea>
         </div>
       </div>
 
@@ -398,7 +398,7 @@ function fmtCommasEl(el){
   let count=0,pos=0; for(;pos<f.length&&count<before;pos++){if(/\d/.test(f[pos]))count++;}
   try{el.setSelectionRange(pos,pos);}catch(e){}
 }
-const DEFAULT_TERMS="The customer agrees to pay the outstanding balance stated above within the period indicated. Kiru Energy Ltd reserves the right to withhold further goods, services, or installation until the balance is settled in full.";
+const DEFAULT_TERMS="The customer agrees to pay the outstanding balance stated above within the period indicated. Where the customer violates this agreement, Kiru Energy Ltd reserves the right to recover the installed equipment, in addition to any other remedy available to it.";
 function genNo(){
   const d=new Date();
   const ymd=""+d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
