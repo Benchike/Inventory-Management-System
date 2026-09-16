@@ -79,16 +79,7 @@ window.KIRU_CONFIG = {
   .stagepill.commissioned{background:rgba(31,170,107,.16);color:#1faa6b;border-color:rgba(31,170,107,.45)}
   .stagepill.active{background:#021431;color:#00a4ff;border-color:#021431}
 
-  .upbtn{display:inline-block;font-size:.76rem;font-weight:700;color:var(--blue-deep);cursor:pointer;border:1px dashed var(--line);border-radius:8px;padding:9px 13px;margin-bottom:4px}
-  .upbtn:hover{border-color:var(--blue)}
-
-  .photogrid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:8px;margin-bottom:6px}
-  .pshot{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--soft)}
-  .pshot img{width:100%;height:100px;object-fit:cover;display:block}
-  .pshot .pbody{padding:6px 7px}
-  .pshot .pbody input{font-size:.72rem;padding:5px 6px;margin-bottom:4px}
-  .pshot .pdel{width:100%;font-size:.68rem;font-weight:700;color:#ff6b6b;background:none;border:1px solid var(--line);border-radius:6px;padding:4px;cursor:pointer}
-  .pshot .pdel:hover{border-color:#ff6b6b;background:rgba(255,107,107,.08)}
+  .autonote{font-size:.68rem;color:var(--muted);margin-bottom:10px;font-weight:600}
 
   .modalbg{position:fixed;inset:0;background:rgba(2,20,49,.55);display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
   .modalbg.show{display:flex}
@@ -134,10 +125,6 @@ window.KIRU_CONFIG = {
   .rep-kpi .c.dk .v{color:#00a4ff}
   .rep-h{font-size:12px;font-weight:800;color:#021431;display:flex;align-items:center;gap:8px;margin:20px 0 9px}
   .rep-h::before{content:"";width:4px;height:14px;background:#00a4ff;border-radius:3px}
-  .pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
-  .pcell{border:1px solid #e3e9f1;border-radius:8px;overflow:hidden;background:#f7fafd}
-  .pcell img{width:100%;height:110px;object-fit:cover;display:block}
-  .pcell .cap{font-size:9px;padding:5px 7px;color:#56657a;font-weight:600}
   @media print{
     body{background:#fff!important;background-image:none!important}
     .wrap,header,.modalbg{display:none!important}
@@ -200,7 +187,7 @@ window.KIRU_CONFIG = {
     <div class="mhead"><h3 id="siteModalTitle">Site</h3><button class="mclose" id="siteModalClose">✕</button></div>
     <div class="dtabs" id="dtabs">
       <button class="dtab on" data-tab="overview">Overview</button>
-      <button class="dtab" data-tab="photos">Photos</button>
+      <button class="dtab" data-tab="media">Media</button>
       <button class="dtab" data-tab="complaints">Complaints</button>
       <button class="dtab" data-tab="maintenance">Maintenance</button>
       <button class="dtab" data-tab="finance">Finance</button>
@@ -235,21 +222,8 @@ document.getElementById("themeToggle").addEventListener("click",()=>applyTheme(r
 const $=id=>document.getElementById(id);
 const esc=s=>(s||"").toString().replace(/</g,"&lt;").replace(/"/g,"&quot;");
 const ngn=new Intl.NumberFormat("en-NG",{style:"currency",currency:"NGN",maximumFractionDigits:0});
-const num=id=>parseFloat(($(id).value||"").toString().replace(/,/g,""))||0;
 function today(){ return new Date().toISOString().slice(0,10); }
 function fmtDate(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}); }
-function resizeImage(dataURL,maxW,cb){
-  const img=new Image();
-  img.onload=()=>{
-    let w=img.width,h=img.height;
-    if(w>maxW){ h=Math.round(h*maxW/w); w=maxW; }
-    const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
-    cv.getContext("2d").drawImage(img,0,0,w,h);
-    cb(cv.toDataURL("image/jpeg",0.82));
-  };
-  img.src=dataURL;
-}
-
 const CO={name:"Kiru Energy Ltd",rc:"RC 1619891",addr:"44 Bourdillon Road, Ikoyi, Lagos, Nigeria",
   email:"Business@ourkiru.com",phone:"+234-813-026-6232",web:"www.ourkiru.com"};
 function docHead(title,metaHTML){
@@ -358,23 +332,27 @@ function openSiteModal(id){
   renderTabsBar(); renderSiteModalBody();
   $("siteModalBg").classList.add("show");
 }
-function closeSiteModal(){
+async function closeSiteModal(){
+  await cleanupBlankDrafts();
   const s=sites.find(x=>x.id===currentSiteId);
   if(s && !s.shop_location && !s.contact_person && !s.phone_number && !Number(s.project_cost) &&
-     (!s.pre_install_photos||!s.pre_install_photos.length) && (!s.post_install_photos||!s.post_install_photos.length) &&
+     !s.pre_install_media_link && !s.post_install_media_link &&
      !complaints.some(c=>c.site_id===s.id) && !maintenance.some(m=>m.site_id===s.id) &&
      !expenses.some(e=>e.site_id===s.id) && !deposits.some(d=>d.site_id===s.id)){
-    SB.from("project_sites").delete().eq("id",s.id).then(()=>{ sites=sites.filter(x=>x.id!==s.id); renderAll(); });
+    await SB.from("project_sites").delete().eq("id",s.id);
+    sites=sites.filter(x=>x.id!==s.id);
   }
   $("siteModalBg").classList.remove("show");
   currentSiteId=null;
+  showComplaintForm=false; showMaintForm=false; showExpenseForm=false; showDepositForm=false;
+  renderAll();
 }
 $("siteModalClose").addEventListener("click",closeSiteModal);
 $("siteModalCancel").addEventListener("click",closeSiteModal);
 $("siteModalBg").addEventListener("click",e=>{ if(e.target===$("siteModalBg")) closeSiteModal(); });
 $("siteDelete").addEventListener("click",async()=>{
   if(!currentSiteId||!isAdmin())return;
-  if(!confirm("Permanently delete this site, including its photos, complaints, and maintenance history? This cannot be undone."))return;
+  if(!confirm("Permanently delete this site, including its media links, complaints, and maintenance history? This cannot be undone."))return;
   const {error}=await SB.from("project_sites").delete().eq("id",currentSiteId);
   if(error){ alert("Could not delete: "+error.message); return; }
   sites=sites.filter(x=>x.id!==currentSiteId);
@@ -389,14 +367,15 @@ $("siteDelete").addEventListener("click",async()=>{
 function renderTabsBar(){
   $("dtabs").querySelectorAll(".dtab").forEach(b=>b.classList.toggle("on", b.dataset.tab===activeTab));
 }
-$("dtabs").querySelectorAll(".dtab").forEach(b=>b.addEventListener("click",()=>{
+$("dtabs").querySelectorAll(".dtab").forEach(b=>b.addEventListener("click",async()=>{
+  await cleanupBlankDrafts();
   activeTab=b.dataset.tab; showComplaintForm=false; showMaintForm=false; showExpenseForm=false; showDepositForm=false;
-  renderTabsBar(); renderSiteModalBody();
+  renderTabsBar(); renderSiteModalBody(); renderAll();
 }));
 function renderSiteModalBody(){
   const s=sites.find(x=>x.id===currentSiteId); if(!s)return;
   if(activeTab==="overview") renderOverviewTab(s);
-  else if(activeTab==="photos") renderPhotosTab(s);
+  else if(activeTab==="media") renderMediaTab(s);
   else if(activeTab==="complaints") renderComplaintsTab(s);
   else if(activeTab==="maintenance") renderMaintenanceTab(s);
   else renderFinanceTab(s);
@@ -413,7 +392,7 @@ async function saveSiteNow(s){
     phone_number:s.phone_number||"", stage:s.stage||"Site Survey",
     survey_date:s.survey_date||null, install_start_date:s.install_start_date||null,
     install_complete_date:s.install_complete_date||null, commissioning_date:s.commissioning_date||null,
-    pre_install_photos:s.pre_install_photos||[], post_install_photos:s.post_install_photos||[], notes:s.notes||"",
+    pre_install_media_link:s.pre_install_media_link||"", post_install_media_link:s.post_install_media_link||"", notes:s.notes||"",
     project_cost:Number(s.project_cost)||0};
   const {error}=await SB.from("project_sites").update(row).eq("id",s.id);
   if(error) console.error("site save error",error);
@@ -421,6 +400,7 @@ async function saveSiteNow(s){
 }
 function renderOverviewTab(s){
   $("siteModalBody").innerHTML=`
+    <div class="autonote">Saves automatically as you type</div>
     <div class="row2 mb"><div><span class="lab">Site address</span><input data-f="shop_location" value="${esc(s.shop_location)}"></div>
       <div><span class="lab">State / Region</span><input data-f="state_region" value="${esc(s.state_region)}"></div></div>
     <div class="row2 mb"><div><span class="lab">Contact person</span><input data-f="contact_person" value="${esc(s.contact_person)}"></div>
@@ -439,66 +419,43 @@ function renderOverviewTab(s){
   }));
 }
 
-/* ---- Photos ---- */
-function renderPhotosTab(s){
-  const pre=s.pre_install_photos||[], post=s.post_install_photos||[];
-  const shotHTML=arr=>arr.map((p,i)=>`<div class="pshot">
-      <img src="${p.img}">
-      <div class="pbody"><input placeholder="Caption (optional)" data-cap="${i}" value="${esc(p.caption||'')}">
-        <button type="button" class="pdel" data-delphoto="${i}">Remove</button></div>
-    </div>`).join("");
+/* ---- Media ---- */
+function renderMediaTab(s){
   $("siteModalBody").innerHTML=`
-    <h2 style="margin-top:6px">Pre-installation photos <span style="font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0;font-size:.72rem">— for the technical team to assess the building before the site visit</span></h2>
-    <label class="upbtn">Upload photo(s)<input type="file" accept="image/*" multiple id="preUpload" style="display:none"></label>
-    <div class="photogrid2" id="preGrid">${shotHTML(pre)||'<div class="histempty" style="grid-column:1/-1">No pre-installation photos yet</div>'}</div>
-    <div style="border-top:1px solid var(--line);margin:16px 0"></div>
-    <h2>Post-installation photos <span style="font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0;font-size:.72rem">— for reference once commissioned</span></h2>
-    <label class="upbtn">Upload photo(s)<input type="file" accept="image/*" multiple id="postUpload" style="display:none"></label>
-    <div class="photogrid2" id="postGrid">${shotHTML(post)||'<div class="histempty" style="grid-column:1/-1">No post-installation photos yet</div>'}</div>`;
-  $("preUpload").addEventListener("change",e=>handlePhotoUpload(e,s,"pre_install_photos"));
-  $("postUpload").addEventListener("change",e=>handlePhotoUpload(e,s,"post_install_photos"));
-  wirePhotoGrid("preGrid",s,"pre_install_photos");
-  wirePhotoGrid("postGrid",s,"post_install_photos");
-}
-function wirePhotoGrid(gridId,s,key){
-  const g=$(gridId); if(!g)return;
-  g.querySelectorAll("[data-cap]").forEach(el=>el.addEventListener("input",e=>{
-    (s[key]||[])[+e.target.dataset.cap].caption=e.target.value;
+    <div class="autonote">Saves automatically as you type</div>
+    <div class="mb"><span class="lab">Pre-installation media link <small>— link to photos/videos from before the site visit (e.g. a Google Drive or Photos album)</small></span>
+      <input type="url" data-f="pre_install_media_link" value="${esc(s.pre_install_media_link)}" placeholder="https://…"></div>
+    <div><span class="lab">Post-installation media link <small>— link to reference photos/videos once commissioned</small></span>
+      <input type="url" data-f="post_install_media_link" value="${esc(s.post_install_media_link)}" placeholder="https://…"></div>`;
+  $("siteModalBody").querySelectorAll("[data-f]").forEach(el=>el.addEventListener("input",e=>{
+    s[e.target.dataset.f]=e.target.value;
     queueSiteSave(s);
   }));
-  g.querySelectorAll("[data-delphoto]").forEach(b=>b.addEventListener("click",()=>{
-    s[key].splice(+b.dataset.delphoto,1);
-    renderPhotosTab(s);
-    saveSiteNow(s);
-  }));
-}
-function handlePhotoUpload(e,s,key){
-  const files=[...e.target.files]; if(!files.length)return;
-  if(!s[key]) s[key]=[];
-  let remaining=files.length;
-  files.forEach(f=>{
-    const r=new FileReader();
-    r.onload=()=>{
-      resizeImage(r.result,1000,out=>{
-        s[key].push({img:out,caption:""});
-        remaining--;
-        if(remaining===0){ renderPhotosTab(s); saveSiteNow(s); }
-      });
-    };
-    r.readAsDataURL(f);
-  });
-  e.target.value="";
 }
 
 /* ---- Complaints ---- */
+let complaintSaveTimers={};
+function queueComplaintSave(c){
+  clearTimeout(complaintSaveTimers[c.id]);
+  complaintSaveTimers[c.id]=setTimeout(()=>saveComplaintNow(c),700);
+}
+async function saveComplaintNow(c){
+  const row={date_reported:c.date_reported||today(), description:c.description||"", status:c.status||"Open",
+    resolution_notes:c.resolution_notes||""};
+  const {error}=await SB.from("project_site_complaints").update(row).eq("id",c.id);
+  if(error){ console.error("complaint save error",error); return; }
+  renderAll();
+}
+function isComplaintBlank(c){ return !(c.description||"").trim(); }
 function renderComplaintsTab(s){
   const list=complaints.filter(c=>c.site_id===s.id).slice().sort((a,b)=>(b.date_reported||"").localeCompare(a.date_reported||""));
   const formHTML=showComplaintForm?`<div class="card" style="padding:14px;margin:6px 0 14px">
-      <div class="row2 mb"><div><span class="lab">Date reported</span><input type="date" id="cDate" value="${cDraft.date_reported||today()}"></div>
-        <div><span class="lab">Status</span><select id="cStatus"><option ${cDraft.status==='Open'?'selected':''}>Open</option><option ${cDraft.status==='In Progress'?'selected':''}>In Progress</option><option ${cDraft.status==='Resolved'?'selected':''}>Resolved</option></select></div></div>
-      <div class="mb"><span class="lab">Complaint description</span><textarea id="cDesc" style="min-height:60px">${esc(cDraft.description||'')}</textarea></div>
-      <div><span class="lab">Resolution notes <small>(optional)</small></span><textarea id="cRes" style="min-height:50px">${esc(cDraft.resolution_notes||'')}</textarea></div>
-      <div style="display:flex;gap:8px;margin-top:10px"><button class="newbtn" id="cSave" type="button">${editingComplaintId?'Update':'Save'} complaint</button><button class="ghostbtn" id="cCancel" type="button">Cancel</button></div>
+      <div class="autonote">Saves automatically as you type</div>
+      <div class="row2 mb"><div><span class="lab">Date reported</span><input type="date" data-cf="date_reported" value="${cDraft.date_reported||today()}"></div>
+        <div><span class="lab">Status</span><select data-cf="status"><option ${cDraft.status==='Open'?'selected':''}>Open</option><option ${cDraft.status==='In Progress'?'selected':''}>In Progress</option><option ${cDraft.status==='Resolved'?'selected':''}>Resolved</option></select></div></div>
+      <div class="mb"><span class="lab">Complaint description</span><textarea data-cf="description" style="min-height:60px">${esc(cDraft.description||'')}</textarea></div>
+      <div><span class="lab">Resolution notes <small>(optional)</small></span><textarea data-cf="resolution_notes" style="min-height:50px">${esc(cDraft.resolution_notes||'')}</textarea></div>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="ghostbtn" id="cDone" type="button">Done</button></div>
     </div>`:`<button class="newbtn" id="addComplaintBtn" type="button" style="margin:6px 0 14px">+ Log complaint</button>`;
   const rows=list.map(c=>`<tr>
       <td>${fmtDate(c.date_reported)}</td>
@@ -510,14 +467,29 @@ function renderComplaintsTab(s){
     <div class="logtbwrap"><table class="logtable"><thead><tr><th>Date</th><th>Description</th><th>Status</th><th></th></tr></thead>
     <tbody>${rows||'<tr><td colspan="4" class="histempty">No complaints logged for this site</td></tr>'}</tbody></table></div>`;
   if(showComplaintForm){
-    $("cSave").addEventListener("click",()=>saveComplaint(s));
-    $("cCancel").addEventListener("click",()=>{ showComplaintForm=false; editingComplaintId=null; renderComplaintsTab(s); });
+    $("siteModalBody").querySelectorAll("[data-cf]").forEach(el=>el.addEventListener("input",e=>{
+      cDraft[e.target.dataset.cf]=e.target.value;
+      queueComplaintSave(cDraft);
+    }));
+    $("cDone").addEventListener("click",async()=>{
+      if(isComplaintBlank(cDraft)){
+        await SB.from("project_site_complaints").delete().eq("id",cDraft.id);
+        complaints=complaints.filter(x=>x.id!==cDraft.id);
+      }
+      showComplaintForm=false; editingComplaintId=null; renderComplaintsTab(s); renderAll();
+    });
   } else {
-    $("addComplaintBtn").addEventListener("click",()=>{ cDraft={status:"Open"}; showComplaintForm=true; editingComplaintId=null; renderComplaintsTab(s); });
+    $("addComplaintBtn").addEventListener("click",async()=>{
+      const {data,error}=await SB.from("project_site_complaints").insert({site_id:s.id,created_by:currentUserEmail}).select("*").single();
+      if(error){alert("Could not create complaint: "+error.message);return;}
+      complaints.push(data);
+      cDraft=data; editingComplaintId=data.id; showComplaintForm=true;
+      renderComplaintsTab(s); renderAll();
+    });
   }
   $("siteModalBody").querySelectorAll("[data-editc]").forEach(b=>b.addEventListener("click",()=>{
     const c=complaints.find(x=>x.id===b.dataset.editc); if(!c)return;
-    cDraft={...c}; editingComplaintId=c.id; showComplaintForm=true; renderComplaintsTab(s);
+    cDraft=c; editingComplaintId=c.id; showComplaintForm=true; renderComplaintsTab(s);
   }));
   $("siteModalBody").querySelectorAll("[data-delc]").forEach(b=>b.addEventListener("click",async()=>{
     if(!isAdmin())return;
@@ -528,36 +500,32 @@ function renderComplaintsTab(s){
     renderComplaintsTab(s); renderAll();
   }));
 }
-async function saveComplaint(s){
-  const desc=$("cDesc").value.trim();
-  if(!desc){ alert("Enter a complaint description."); return; }
-  const row={site_id:s.id, date_reported:$("cDate").value||today(), description:desc, status:$("cStatus").value,
-    resolution_notes:$("cRes").value.trim()};
-  if(editingComplaintId){
-    const {error}=await SB.from("project_site_complaints").update(row).eq("id",editingComplaintId);
-    if(error){alert("Could not save: "+error.message);return;}
-    complaints=complaints.map(c=>c.id===editingComplaintId?{...c,...row}:c);
-  } else {
-    row.created_by=currentUserEmail;
-    const {data,error}=await SB.from("project_site_complaints").insert(row).select("*").single();
-    if(error){alert("Could not save: "+error.message);return;}
-    complaints.push(data);
-  }
-  showComplaintForm=false; editingComplaintId=null;
-  renderComplaintsTab(s); renderAll();
-}
 
 /* ---- Maintenance ---- */
+let maintSaveTimers={};
+function queueMaintSave(m){
+  clearTimeout(maintSaveTimers[m.id]);
+  maintSaveTimers[m.id]=setTimeout(()=>saveMaintNow(m),700);
+}
+async function saveMaintNow(m){
+  const row={visit_date:m.visit_date||today(), visit_type:m.visit_type||"Routine", technician:m.technician||"",
+    notes:m.notes||"", next_visit_due:m.next_visit_due||null, cost:Number(m.cost)||0};
+  const {error}=await SB.from("project_site_maintenance").update(row).eq("id",m.id);
+  if(error){ console.error("maintenance save error",error); return; }
+  renderAll();
+}
+function isMaintBlank(m){ return !(m.notes||"").trim() && !(m.technician||"").trim() && !Number(m.cost); }
 function renderMaintenanceTab(s){
   const list=maintenance.filter(m=>m.site_id===s.id).slice().sort((a,b)=>(b.visit_date||"").localeCompare(a.visit_date||""));
   const formHTML=showMaintForm?`<div class="card" style="padding:14px;margin:6px 0 14px">
-      <div class="row2 mb"><div><span class="lab">Visit date</span><input type="date" id="mDate" value="${mDraft.visit_date||today()}"></div>
-        <div><span class="lab">Visit type</span><select id="mType"><option ${mDraft.visit_type==='Routine'?'selected':''}>Routine</option><option ${mDraft.visit_type==='Preventive'?'selected':''}>Preventive</option><option ${mDraft.visit_type==='Corrective'?'selected':''}>Corrective</option><option ${mDraft.visit_type==='Inspection'?'selected':''}>Inspection</option></select></div></div>
-      <div class="row2 mb"><div><span class="lab">Technician</span><input id="mTech" value="${esc(mDraft.technician||'')}"></div>
-        <div><span class="lab">Next visit due <small>(optional)</small></span><input type="date" id="mNext" value="${mDraft.next_visit_due||''}"></div></div>
-      <div class="row2 mb"><div><span class="lab">What was fixed</span><textarea id="mNotes" style="min-height:60px">${esc(mDraft.notes||'')}</textarea></div>
-        <div><span class="lab">Cost of visit</span><input type="number" step="0.01" id="mCost" value="${mDraft.cost||0}"></div></div>
-      <div style="display:flex;gap:8px;margin-top:10px"><button class="newbtn" id="mSave" type="button">${editingMaintId?'Update':'Save'} visit</button><button class="ghostbtn" id="mCancel" type="button">Cancel</button></div>
+      <div class="autonote">Saves automatically as you type</div>
+      <div class="row2 mb"><div><span class="lab">Visit date</span><input type="date" data-mf="visit_date" value="${mDraft.visit_date||today()}"></div>
+        <div><span class="lab">Visit type</span><select data-mf="visit_type"><option ${mDraft.visit_type==='Routine'?'selected':''}>Routine</option><option ${mDraft.visit_type==='Preventive'?'selected':''}>Preventive</option><option ${mDraft.visit_type==='Corrective'?'selected':''}>Corrective</option><option ${mDraft.visit_type==='Inspection'?'selected':''}>Inspection</option></select></div></div>
+      <div class="row2 mb"><div><span class="lab">Technician</span><input data-mf="technician" value="${esc(mDraft.technician||'')}"></div>
+        <div><span class="lab">Next visit due <small>(optional)</small></span><input type="date" data-mf="next_visit_due" value="${mDraft.next_visit_due||''}"></div></div>
+      <div class="row2 mb"><div><span class="lab">What was fixed</span><textarea data-mf="notes" style="min-height:60px">${esc(mDraft.notes||'')}</textarea></div>
+        <div><span class="lab">Cost of visit</span><input type="number" step="0.01" data-mf="cost" value="${mDraft.cost||0}"></div></div>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="ghostbtn" id="mDone" type="button">Done</button></div>
     </div>`:`<button class="newbtn" id="addMaintBtn" type="button" style="margin:6px 0 14px">+ Log maintenance visit</button>`;
   const rows=list.map(m=>`<tr>
       <td>${fmtDate(m.visit_date)}</td><td>${esc(m.visit_type)}</td><td>${esc(m.technician)||'—'}</td>
@@ -569,14 +537,29 @@ function renderMaintenanceTab(s){
     <div class="logtbwrap"><table class="logtable"><thead><tr><th>Date</th><th>Type</th><th>Technician</th><th>What was fixed</th><th>Cost</th><th></th></tr></thead>
     <tbody>${rows||'<tr><td colspan="6" class="histempty">No maintenance visits logged for this site</td></tr>'}</tbody></table></div>`;
   if(showMaintForm){
-    $("mSave").addEventListener("click",()=>saveMaint(s));
-    $("mCancel").addEventListener("click",()=>{ showMaintForm=false; editingMaintId=null; renderMaintenanceTab(s); });
+    $("siteModalBody").querySelectorAll("[data-mf]").forEach(el=>el.addEventListener("input",e=>{
+      mDraft[e.target.dataset.mf]=e.target.value;
+      queueMaintSave(mDraft);
+    }));
+    $("mDone").addEventListener("click",async()=>{
+      if(isMaintBlank(mDraft)){
+        await SB.from("project_site_maintenance").delete().eq("id",mDraft.id);
+        maintenance=maintenance.filter(x=>x.id!==mDraft.id);
+      }
+      showMaintForm=false; editingMaintId=null; renderMaintenanceTab(s); renderAll();
+    });
   } else {
-    $("addMaintBtn").addEventListener("click",()=>{ mDraft={visit_type:"Routine"}; showMaintForm=true; editingMaintId=null; renderMaintenanceTab(s); });
+    $("addMaintBtn").addEventListener("click",async()=>{
+      const {data,error}=await SB.from("project_site_maintenance").insert({site_id:s.id,created_by:currentUserEmail}).select("*").single();
+      if(error){alert("Could not create maintenance visit: "+error.message);return;}
+      maintenance.push(data);
+      mDraft=data; editingMaintId=data.id; showMaintForm=true;
+      renderMaintenanceTab(s); renderAll();
+    });
   }
   $("siteModalBody").querySelectorAll("[data-editm]").forEach(b=>b.addEventListener("click",()=>{
     const m=maintenance.find(x=>x.id===b.dataset.editm); if(!m)return;
-    mDraft={...m}; editingMaintId=m.id; showMaintForm=true; renderMaintenanceTab(s);
+    mDraft=m; editingMaintId=m.id; showMaintForm=true; renderMaintenanceTab(s);
   }));
   $("siteModalBody").querySelectorAll("[data-delm]").forEach(b=>b.addEventListener("click",async()=>{
     if(!isAdmin())return;
@@ -586,23 +569,6 @@ function renderMaintenanceTab(s){
     maintenance=maintenance.filter(x=>x.id!==b.dataset.delm);
     renderMaintenanceTab(s); renderAll();
   }));
-}
-async function saveMaint(s){
-  const row={site_id:s.id, visit_date:$("mDate").value||today(), visit_type:$("mType").value,
-    technician:$("mTech").value.trim(), notes:$("mNotes").value.trim(), next_visit_due:$("mNext").value||null,
-    cost:num("mCost")};
-  if(editingMaintId){
-    const {error}=await SB.from("project_site_maintenance").update(row).eq("id",editingMaintId);
-    if(error){alert("Could not save: "+error.message);return;}
-    maintenance=maintenance.map(m=>m.id===editingMaintId?{...m,...row}:m);
-  } else {
-    row.created_by=currentUserEmail;
-    const {data,error}=await SB.from("project_site_maintenance").insert(row).select("*").single();
-    if(error){alert("Could not save: "+error.message);return;}
-    maintenance.push(data);
-  }
-  showMaintForm=false; editingMaintId=null;
-  renderMaintenanceTab(s); renderAll();
 }
 
 /* ---- Finance ---- */
@@ -623,12 +589,13 @@ function renderFinanceTab(s){
   const balanceDue=projectCost-depositTotal;
 
   const expFormHTML=showExpenseForm?`<div class="card" style="padding:14px;margin:6px 0 14px">
-      <div class="row2 mb"><div><span class="lab">Date</span><input type="date" id="eDate" value="${eDraft.expense_date||today()}"></div>
-        <div><span class="lab">Category</span><select id="eCat">${EXP_CATS.map(c=>`<option ${eDraft.category===c?'selected':''}>${c}</option>`).join("")}</select></div></div>
-      <div class="mb"><span class="lab">Description</span><input id="eDesc" value="${esc(eDraft.description||'')}"></div>
-      <div class="row2 mb"><div><span class="lab">Qty</span><input type="number" step="0.01" id="eQty" value="${eDraft.qty||1}"></div>
-        <div><span class="lab">Unit cost</span><input type="number" step="0.01" id="eUnit" value="${eDraft.unit_cost||0}"></div></div>
-      <div style="display:flex;gap:8px;margin-top:10px"><button class="newbtn" id="eSave" type="button">${editingExpenseId?'Update':'Save'} expense</button><button class="ghostbtn" id="eCancel" type="button">Cancel</button></div>
+      <div class="autonote">Saves automatically as you type</div>
+      <div class="row2 mb"><div><span class="lab">Date</span><input type="date" data-ef="expense_date" value="${eDraft.expense_date||today()}"></div>
+        <div><span class="lab">Category</span><select data-ef="category">${EXP_CATS.map(c=>`<option ${eDraft.category===c?'selected':''}>${c}</option>`).join("")}</select></div></div>
+      <div class="mb"><span class="lab">Description</span><input data-ef="description" value="${esc(eDraft.description||'')}"></div>
+      <div class="row2 mb"><div><span class="lab">Qty</span><input type="number" step="0.01" data-ef="qty" value="${eDraft.qty||1}"></div>
+        <div><span class="lab">Unit cost</span><input type="number" step="0.01" data-ef="unit_cost" value="${eDraft.unit_cost||0}"></div></div>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="ghostbtn" id="eDone" type="button">Done</button></div>
     </div>`:`<button class="newbtn" id="addExpenseBtn" type="button" style="margin:6px 0 14px">+ Log expense</button>`;
   const expRows=exp.map(e=>`<tr>
       <td>${fmtDate(e.expense_date)}</td><td>${esc(e.category)}</td><td>${esc(e.description)||'—'}</td>
@@ -637,12 +604,13 @@ function renderFinanceTab(s){
     </tr>`).join("");
 
   const depFormHTML=showDepositForm?`<div class="card" style="padding:14px;margin:6px 0 14px">
-      <div class="row2 mb"><div><span class="lab">Date</span><input type="date" id="dDate" value="${dDraft.deposit_date||today()}"></div>
-        <div><span class="lab">Amount</span><input type="number" step="0.01" id="dAmount" value="${dDraft.amount||0}"></div></div>
-      <div class="row2 mb"><div><span class="lab">Method <small>(optional)</small></span><input id="dMethod" value="${esc(dDraft.method||'')}"></div>
-        <div><span class="lab">Reference <small>(optional)</small></span><input id="dRef" value="${esc(dDraft.reference||'')}"></div></div>
-      <div><span class="lab">Notes <small>(optional)</small></span><textarea id="dNotes" style="min-height:50px">${esc(dDraft.notes||'')}</textarea></div>
-      <div style="display:flex;gap:8px;margin-top:10px"><button class="newbtn" id="dSave" type="button">${editingDepositId?'Update':'Save'} deposit</button><button class="ghostbtn" id="dCancel" type="button">Cancel</button></div>
+      <div class="autonote">Saves automatically as you type</div>
+      <div class="row2 mb"><div><span class="lab">Date</span><input type="date" data-df="deposit_date" value="${dDraft.deposit_date||today()}"></div>
+        <div><span class="lab">Amount</span><input type="number" step="0.01" data-df="amount" value="${dDraft.amount||0}"></div></div>
+      <div class="row2 mb"><div><span class="lab">Method <small>(optional)</small></span><input data-df="method" value="${esc(dDraft.method||'')}"></div>
+        <div><span class="lab">Reference <small>(optional)</small></span><input data-df="reference" value="${esc(dDraft.reference||'')}"></div></div>
+      <div><span class="lab">Notes <small>(optional)</small></span><textarea data-df="notes" style="min-height:50px">${esc(dDraft.notes||'')}</textarea></div>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="ghostbtn" id="dDone" type="button">Done</button></div>
     </div>`:`<button class="newbtn" id="addDepositBtn" type="button" style="margin:6px 0 14px">+ Log deposit</button>`;
   const depRows=dep.map(d=>`<tr>
       <td>${fmtDate(d.deposit_date)}</td><td>${ngn.format(Number(d.amount||0))}</td><td>${esc(d.method)||'—'}</td><td>${esc(d.reference)||'—'}</td>
@@ -676,14 +644,29 @@ function renderFinanceTab(s){
     <tbody>${depRows||'<tr><td colspan="5" class="histempty">No deposits logged for this site</td></tr>'}</tbody></table></div>`;
 
   if(showExpenseForm){
-    $("eSave").addEventListener("click",()=>saveExpense(s));
-    $("eCancel").addEventListener("click",()=>{ showExpenseForm=false; editingExpenseId=null; renderFinanceTab(s); });
+    $("siteModalBody").querySelectorAll("[data-ef]").forEach(el=>el.addEventListener("input",e=>{
+      eDraft[e.target.dataset.ef]=e.target.value;
+      queueExpenseSave(eDraft);
+    }));
+    $("eDone").addEventListener("click",async()=>{
+      if(isExpenseBlank(eDraft)){
+        await SB.from("project_site_expenses").delete().eq("id",eDraft.id);
+        expenses=expenses.filter(x=>x.id!==eDraft.id);
+      }
+      showExpenseForm=false; editingExpenseId=null; renderFinanceTab(s);
+    });
   } else {
-    $("addExpenseBtn").addEventListener("click",()=>{ eDraft={category:"Equipment",qty:1}; showExpenseForm=true; editingExpenseId=null; renderFinanceTab(s); });
+    $("addExpenseBtn").addEventListener("click",async()=>{
+      const {data,error}=await SB.from("project_site_expenses").insert({site_id:s.id,created_by:currentUserEmail}).select("*").single();
+      if(error){alert("Could not create expense: "+error.message);return;}
+      expenses.push(data);
+      eDraft=data; editingExpenseId=data.id; showExpenseForm=true;
+      renderFinanceTab(s);
+    });
   }
   $("siteModalBody").querySelectorAll("[data-edite]").forEach(b=>b.addEventListener("click",()=>{
     const e=expenses.find(x=>x.id===b.dataset.edite); if(!e)return;
-    eDraft={...e}; editingExpenseId=e.id; showExpenseForm=true; renderFinanceTab(s);
+    eDraft=e; editingExpenseId=e.id; showExpenseForm=true; renderFinanceTab(s);
   }));
   $("siteModalBody").querySelectorAll("[data-dele]").forEach(b=>b.addEventListener("click",async()=>{
     if(!isAdmin())return;
@@ -695,14 +678,29 @@ function renderFinanceTab(s){
   }));
 
   if(showDepositForm){
-    $("dSave").addEventListener("click",()=>saveDeposit(s));
-    $("dCancel").addEventListener("click",()=>{ showDepositForm=false; editingDepositId=null; renderFinanceTab(s); });
+    $("siteModalBody").querySelectorAll("[data-df]").forEach(el=>el.addEventListener("input",e=>{
+      dDraft[e.target.dataset.df]=e.target.value;
+      queueDepositSave(dDraft);
+    }));
+    $("dDone").addEventListener("click",async()=>{
+      if(isDepositBlank(dDraft)){
+        await SB.from("project_site_deposits").delete().eq("id",dDraft.id);
+        deposits=deposits.filter(x=>x.id!==dDraft.id);
+      }
+      showDepositForm=false; editingDepositId=null; renderFinanceTab(s);
+    });
   } else {
-    $("addDepositBtn").addEventListener("click",()=>{ dDraft={}; showDepositForm=true; editingDepositId=null; renderFinanceTab(s); });
+    $("addDepositBtn").addEventListener("click",async()=>{
+      const {data,error}=await SB.from("project_site_deposits").insert({site_id:s.id,created_by:currentUserEmail}).select("*").single();
+      if(error){alert("Could not create deposit: "+error.message);return;}
+      deposits.push(data);
+      dDraft=data; editingDepositId=data.id; showDepositForm=true;
+      renderFinanceTab(s);
+    });
   }
   $("siteModalBody").querySelectorAll("[data-editd]").forEach(b=>b.addEventListener("click",()=>{
     const d=deposits.find(x=>x.id===b.dataset.editd); if(!d)return;
-    dDraft={...d}; editingDepositId=d.id; showDepositForm=true; renderFinanceTab(s);
+    dDraft=d; editingDepositId=d.id; showDepositForm=true; renderFinanceTab(s);
   }));
   $("siteModalBody").querySelectorAll("[data-deld]").forEach(b=>b.addEventListener("click",async()=>{
     if(!isAdmin())return;
@@ -713,42 +711,50 @@ function renderFinanceTab(s){
     renderFinanceTab(s);
   }));
 }
-async function saveExpense(s){
-  const desc=$("eDesc").value.trim();
-  if(!desc){ alert("Enter a description for this expense."); return; }
-  const qty=num("eQty")||1, unit=num("eUnit");
-  const row={site_id:s.id, expense_date:$("eDate").value||today(), category:$("eCat").value,
-    description:desc, qty, unit_cost:unit, amount:qty*unit};
-  if(editingExpenseId){
-    const {error}=await SB.from("project_site_expenses").update(row).eq("id",editingExpenseId);
-    if(error){alert("Could not save: "+error.message);return;}
-    expenses=expenses.map(e=>e.id===editingExpenseId?{...e,...row}:e);
-  } else {
-    row.created_by=currentUserEmail;
-    const {data,error}=await SB.from("project_site_expenses").insert(row).select("*").single();
-    if(error){alert("Could not save: "+error.message);return;}
-    expenses.push(data);
-  }
-  showExpenseForm=false; editingExpenseId=null;
-  renderFinanceTab(s);
+let expenseSaveTimers={}, depositSaveTimers={};
+function queueExpenseSave(e){
+  clearTimeout(expenseSaveTimers[e.id]);
+  expenseSaveTimers[e.id]=setTimeout(()=>saveExpenseNow(e),700);
 }
-async function saveDeposit(s){
-  const amount=num("dAmount");
-  if(amount<=0){ alert("Enter a deposit amount."); return; }
-  const row={site_id:s.id, deposit_date:$("dDate").value||today(), amount,
-    method:$("dMethod").value.trim(), reference:$("dRef").value.trim(), notes:$("dNotes").value.trim()};
-  if(editingDepositId){
-    const {error}=await SB.from("project_site_deposits").update(row).eq("id",editingDepositId);
-    if(error){alert("Could not save: "+error.message);return;}
-    deposits=deposits.map(d=>d.id===editingDepositId?{...d,...row}:d);
-  } else {
-    row.created_by=currentUserEmail;
-    const {data,error}=await SB.from("project_site_deposits").insert(row).select("*").single();
-    if(error){alert("Could not save: "+error.message);return;}
-    deposits.push(data);
+async function saveExpenseNow(e){
+  const qty=Number(e.qty)||0, unit=Number(e.unit_cost)||0;
+  const row={expense_date:e.expense_date||today(), category:e.category||"Equipment", description:e.description||"",
+    qty, unit_cost:unit, amount:qty*unit};
+  const {error}=await SB.from("project_site_expenses").update(row).eq("id",e.id);
+  if(error){ console.error("expense save error",error); return; }
+  Object.assign(e,row);
+}
+function isExpenseBlank(e){ return !(e.description||"").trim() && !Number(e.unit_cost); }
+function queueDepositSave(d){
+  clearTimeout(depositSaveTimers[d.id]);
+  depositSaveTimers[d.id]=setTimeout(()=>saveDepositNow(d),700);
+}
+async function saveDepositNow(d){
+  const row={deposit_date:d.deposit_date||today(), amount:Number(d.amount)||0,
+    method:d.method||"", reference:d.reference||"", notes:d.notes||""};
+  const {error}=await SB.from("project_site_deposits").update(row).eq("id",d.id);
+  if(error){ console.error("deposit save error",error); return; }
+  Object.assign(d,row);
+}
+function isDepositBlank(d){ return !Number(d.amount); }
+
+async function cleanupBlankDrafts(){
+  if(showComplaintForm && editingComplaintId && isComplaintBlank(cDraft)){
+    await SB.from("project_site_complaints").delete().eq("id",editingComplaintId);
+    complaints=complaints.filter(x=>x.id!==editingComplaintId);
   }
-  showDepositForm=false; editingDepositId=null;
-  renderFinanceTab(s);
+  if(showMaintForm && editingMaintId && isMaintBlank(mDraft)){
+    await SB.from("project_site_maintenance").delete().eq("id",editingMaintId);
+    maintenance=maintenance.filter(x=>x.id!==editingMaintId);
+  }
+  if(showExpenseForm && editingExpenseId && isExpenseBlank(eDraft)){
+    await SB.from("project_site_expenses").delete().eq("id",editingExpenseId);
+    expenses=expenses.filter(x=>x.id!==editingExpenseId);
+  }
+  if(showDepositForm && editingDepositId && isDepositBlank(dDraft)){
+    await SB.from("project_site_deposits").delete().eq("id",editingDepositId);
+    deposits=deposits.filter(x=>x.id!==editingDepositId);
+  }
 }
 
 /* ---- Site report ---- */
@@ -765,7 +771,7 @@ function docHTML_SiteReport(s){
   const projectCost=Number(s.project_cost||0);
   const netMargin=projectCost-expenseTotal;
   const marginPct=projectCost>0?(netMargin/projectCost*100).toFixed(1)+"%":"—";
-  const photoBlock=(arr,label)=> arr&&arr.length ? `<div class="rep-h">${label}</div><div class="pgrid">${arr.map(p=>`<div class="pcell"><img src="${p.img}">${p.caption?`<div class="cap">${esc(p.caption)}</div>`:''}</div>`).join("")}</div>` : "";
+  const mediaLink=(url,label)=> url ? `<div class="rep-h">${label}</div><div style="font-size:11.5px"><a href="${esc(url)}">${esc(url)}</a></div>` : "";
   const cRows=cList.map(c=>`<tr><td class="c">${fmtDate(c.date_reported)}</td><td class="l">${esc(c.description)}</td><td class="c">${esc(c.status)}</td><td class="l">${esc(c.resolution_notes)||'—'}</td></tr>`).join("");
   const mRows=mList.map(m=>`<tr><td class="c">${fmtDate(m.visit_date)}</td><td class="c">${esc(m.visit_type)}</td><td class="l">${esc(m.technician)||'—'}</td><td class="l">${esc(m.notes)||'—'}</td><td class="r">${ngn.format(Number(m.cost||0))}</td></tr>`).join("");
   const eRows=eList.map(e=>`<tr><td class="c">${fmtDate(e.expense_date)}</td><td class="c">${esc(e.category)}</td><td class="l">${esc(e.description)||'—'}</td><td class="r">${ngn.format(Number(e.amount||0))}</td></tr>`).join("");
@@ -809,8 +815,8 @@ function docHTML_SiteReport(s){
     ${dRows?`<div class="rep-h">Customer Deposits</div><table class="doc"><colgroup><col style="width:70px"><col><col><col style="width:100px"></colgroup>
       <thead><tr><th class="c">Date</th><th class="l">Method</th><th class="l">Reference</th><th>Amount</th></tr></thead>
       <tbody>${dRows}</tbody></table>`:''}
-    ${photoBlock(s.pre_install_photos,"Pre-Installation Photos")}
-    ${photoBlock(s.post_install_photos,"Post-Installation Photos")}
+    ${mediaLink(s.pre_install_media_link,"Pre-Installation Media")}
+    ${mediaLink(s.post_install_media_link,"Post-Installation Media")}
     <div class="rep-h">Complaints Log</div>
     <table class="doc"><colgroup><col style="width:70px"><col><col style="width:80px"><col></colgroup>
       <thead><tr><th class="c">Date</th><th class="l">Description</th><th class="c">Status</th><th class="l">Resolution</th></tr></thead>

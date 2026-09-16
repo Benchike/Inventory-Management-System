@@ -941,6 +941,10 @@ create table if not exists public.project_sites (
   updated_at            timestamptz default now()
 );
 
+-- Media links replace the old per-photo upload galleries above (kept, unused, for existing data).
+alter table public.project_sites add column if not exists pre_install_media_link  text default '';
+alter table public.project_sites add column if not exists post_install_media_link text default '';
+
 create index if not exists project_sites_stage_idx on public.project_sites (stage);
 
 create table if not exists public.project_site_counters (
