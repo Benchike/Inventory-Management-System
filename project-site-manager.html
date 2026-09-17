@@ -81,6 +81,14 @@ window.KIRU_CONFIG = {
 
   .autonote{font-size:.68rem;color:var(--muted);margin-bottom:10px;font-weight:600}
 
+  .expgrid{display:grid;grid-template-columns:1fr 64px 104px 30px;gap:6px;align-items:center;margin-bottom:6px}
+  .expgrid.cat{grid-template-columns:130px 1fr 64px 104px 30px}
+  .exphead{font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;margin-bottom:6px}
+  .expgrid input,.expgrid select{padding:8px 8px;font-size:.8rem}
+  .expgrid .num{text-align:right}
+  .xdel{width:30px;height:34px;border-radius:7px;border:1px solid var(--line);background:var(--soft);color:var(--muted);cursor:pointer;font-size:1rem;line-height:1}
+  .xdel:hover{border-color:#ff6b6b;color:#ff6b6b}
+
   .modalbg{position:fixed;inset:0;background:rgba(2,20,49,.55);display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
   .modalbg.show{display:flex}
   .modal{background:var(--card-bg);border-radius:16px;box-shadow:0 30px 80px -30px rgba(0,0,0,.5);width:100%;max-width:520px;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column}
@@ -270,8 +278,9 @@ const STAGE_CLASS={"Site Survey":"survey","Installation In Progress":"progress",
 let sites=[], complaints=[], maintenance=[], expenses=[], deposits=[];
 let currentSiteId=null, activeTab="overview";
 let editingComplaintId=null, editingMaintId=null, showComplaintForm=false, showMaintForm=false;
-let editingExpenseId=null, editingDepositId=null, showExpenseForm=false, showDepositForm=false;
-let cDraft={}, mDraft={}, eDraft={}, dDraft={};
+let editingDepositId=null, showDepositForm=false;
+let cDraft={}, mDraft={}, dDraft={};
+let mainExpDate=today(), labourExpDate=today();
 
 function matchesSiteFilters(s){
   const q=$("search").value.trim().toLowerCase();
@@ -334,7 +343,7 @@ async function addSite(){
 $("newSiteBtn").addEventListener("click",addSite);
 
 function openSiteModal(id){
-  currentSiteId=id; activeTab="overview"; showComplaintForm=false; showMaintForm=false; showExpenseForm=false; showDepositForm=false;
+  currentSiteId=id; activeTab="overview"; showComplaintForm=false; showMaintForm=false; showDepositForm=false;
   const s=sites.find(x=>x.id===id); if(!s)return;
   $("siteModalTitle").textContent=s.site_no+(s.shop_location?" — "+s.shop_location:"");
   $("siteDelete").style.display=isAdmin()?"inline-block":"none";
@@ -353,7 +362,7 @@ async function closeSiteModal(){
   }
   $("siteModalBg").classList.remove("show");
   currentSiteId=null;
-  showComplaintForm=false; showMaintForm=false; showExpenseForm=false; showDepositForm=false;
+  showComplaintForm=false; showMaintForm=false; showDepositForm=false;
   renderAll();
 }
 $("siteModalClose").addEventListener("click",closeSiteModal);
@@ -378,7 +387,7 @@ function renderTabsBar(){
 }
 $("dtabs").querySelectorAll(".dtab").forEach(b=>b.addEventListener("click",async()=>{
   await cleanupBlankDrafts();
-  activeTab=b.dataset.tab; showComplaintForm=false; showMaintForm=false; showExpenseForm=false; showDepositForm=false;
+  activeTab=b.dataset.tab; showComplaintForm=false; showMaintForm=false; showDepositForm=false;
   renderTabsBar(); renderSiteModalBody(); renderAll();
 }));
 function renderSiteModalBody(){
@@ -582,36 +591,33 @@ function renderMaintenanceTab(s){
 }
 
 /* ---- Finance ---- */
-const EXP_CATS=["Equipment","Installer Labour","Miscellaneous"];
+const MAIN_EXP_CATS=["Equipment","Logistics","Miscellaneous"];
 function renderFinanceTab(s){
   const exp=expenses.filter(e=>e.site_id===s.id).slice().sort((a,b)=>(b.expense_date||"").localeCompare(a.expense_date||""));
+  const mainExp=exp.filter(e=>e.category!=="Installer Labour");
+  const labourExp=exp.filter(e=>e.category==="Installer Labour");
   const dep=deposits.filter(d=>d.site_id===s.id).slice().sort((a,b)=>(b.deposit_date||"").localeCompare(a.deposit_date||""));
   const maint=maintenance.filter(m=>m.site_id===s.id);
 
   const catTotal=cat=>exp.filter(e=>e.category===cat).reduce((sum,e)=>sum+Number(e.amount||0),0);
-  const equipTotal=catTotal("Equipment"), labourTotal=catTotal("Installer Labour"), miscTotal=catTotal("Miscellaneous");
+  const equipTotal=catTotal("Equipment"), logisticsTotal=catTotal("Logistics"), labourTotal=catTotal("Installer Labour"), miscTotal=catTotal("Miscellaneous");
   const maintTotal=maint.reduce((sum,m)=>sum+Number(m.cost||0),0);
-  const expenseTotal=equipTotal+labourTotal+miscTotal+maintTotal;
+  const expenseTotal=equipTotal+logisticsTotal+labourTotal+miscTotal+maintTotal;
   const depositTotal=dep.reduce((sum,d)=>sum+Number(d.amount||0),0);
   const projectCost=Number(s.project_cost||0);
   const netMargin=projectCost-expenseTotal;
   const marginPct=projectCost>0?(netMargin/projectCost*100):0;
   const balanceDue=projectCost-depositTotal;
 
-  const expFormHTML=showExpenseForm?`<div class="card" style="padding:14px;margin:6px 0 14px">
-      <div class="autonote">Saves automatically as you type</div>
-      <div class="row2 mb"><div><span class="lab">Date</span><input type="date" data-ef="expense_date" value="${eDraft.expense_date||today()}"></div>
-        <div><span class="lab">Category</span><select data-ef="category">${EXP_CATS.map(c=>`<option ${eDraft.category===c?'selected':''}>${c}</option>`).join("")}</select></div></div>
-      <div class="mb"><span class="lab">Description</span><input data-ef="description" value="${esc(eDraft.description||'')}"></div>
-      <div class="row2 mb"><div><span class="lab">Qty</span><input type="number" step="0.01" data-ef="qty" value="${eDraft.qty||1}"></div>
-        <div><span class="lab">Unit cost</span><input type="text" inputmode="numeric" data-ef="unit_cost" value="${eDraft.unit_cost?Number(eDraft.unit_cost).toLocaleString('en-US'):''}"></div></div>
-      <div style="display:flex;gap:8px;margin-top:10px"><button class="ghostbtn" id="eDone" type="button">Done</button></div>
-    </div>`:`<button class="newbtn" id="addExpenseBtn" type="button" style="margin:6px 0 14px">+ Log expense</button>`;
-  const expRows=exp.map(e=>`<tr>
-      <td>${fmtDate(e.expense_date)}</td><td>${esc(e.category)}</td><td>${esc(e.description)||'—'}</td>
-      <td>${Number(e.qty||0).toLocaleString("en-US")}</td><td>${ngn.format(Number(e.unit_cost||0))}</td><td>${ngn.format(Number(e.amount||0))}</td>
-      <td><div class="rowactions"><button class="abtn" data-edite="${e.id}">Edit</button>${isAdmin()?`<button class="abtn danger" data-dele="${e.id}">Delete</button>`:''}</div></td>
-    </tr>`).join("");
+  const expRowHTML=(e,withCat)=>`<div class="expgrid${withCat?' cat':''}" data-xid="${e.id}">
+      ${withCat?`<select data-xf="category">${MAIN_EXP_CATS.map(c=>`<option ${e.category===c?'selected':''}>${c}</option>`).join("")}</select>`:''}
+      <input type="text" data-xf="description" value="${esc(e.description)}" placeholder="Description">
+      <input type="number" data-xf="qty" value="${e.qty||''}" placeholder="1">
+      <input type="text" inputmode="numeric" class="num" data-xf="unit_cost" value="${e.unit_cost?Number(e.unit_cost).toLocaleString('en-US'):''}" placeholder="0">
+      ${isAdmin()?`<button class="xdel" type="button" data-delx="${e.id}">✕</button>`:'<span></span>'}
+    </div>`;
+  const mainRows=mainExp.map(e=>expRowHTML(e,true)).join("");
+  const labourRows=labourExp.map(e=>expRowHTML(e,false)).join("");
 
   const depFormHTML=showDepositForm?`<div class="card" style="padding:14px;margin:6px 0 14px">
       <div class="autonote">Saves automatically as you type</div>
@@ -636,15 +642,25 @@ function renderFinanceTab(s){
     </div>
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:18px;line-height:1.7">
       Project cost: <b style="color:var(--text)">${ngn.format(projectCost)}</b>
-      &nbsp;·&nbsp; Equipment ${ngn.format(equipTotal)} · Labour ${ngn.format(labourTotal)} · Misc ${ngn.format(miscTotal)} · Maintenance ${ngn.format(maintTotal)}
+      &nbsp;·&nbsp; Equipment ${ngn.format(equipTotal)} · Logistics ${ngn.format(logisticsTotal)} · Labour ${ngn.format(labourTotal)} · Misc ${ngn.format(miscTotal)} · Maintenance ${ngn.format(maintTotal)}
       &nbsp;·&nbsp; Balance due from customer: <b style="color:var(--text)">${ngn.format(balanceDue)}</b>
       ${projectCost<=0?'<div style="margin-top:4px;color:#b06a12">Set a project cost on the Overview tab to calculate margin %.</div>':''}
     </div>
 
-    <h2>Expenses <span style="font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0;font-size:.72rem">— equipment, installer labour &amp; miscellaneous <small>(maintenance visit costs are logged on the Maintenance tab and included in the totals above)</small></span></h2>
-    ${expFormHTML}
-    <div class="logtbwrap"><table class="logtable"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Qty</th><th>Unit cost</th><th>Amount</th><th></th></tr></thead>
-    <tbody>${expRows||'<tr><td colspan="7" class="histempty">No expenses logged for this site</td></tr>'}</tbody></table></div>
+    <h2>Equipment, Logistics &amp; Miscellaneous</h2>
+    <div class="autonote">Saves automatically as you type</div>
+    <div class="mb" style="max-width:220px"><span class="lab">Date <small>(applied to items added below)</small></span><input type="date" id="mainExpDate" value="${mainExpDate}"></div>
+    <div class="expgrid cat exphead"><span>Category</span><span>Description</span><span>Qty</span><span>Unit cost</span><span></span></div>
+    <div id="mainExpRows">${mainRows||'<div class="histempty">No items logged yet</div>'}</div>
+    <button class="addbtn" id="addMainExpBtn" type="button">+ Add item</button>
+
+    <div style="border-top:1px solid var(--line);margin:20px 0"></div>
+
+    <h2>Installer Labour</h2>
+    <div class="mb" style="max-width:220px"><span class="lab">Date <small>(applied to items added below)</small></span><input type="date" id="labourExpDate" value="${labourExpDate}"></div>
+    <div class="expgrid exphead"><span>Description</span><span>Qty</span><span>Unit cost</span><span></span></div>
+    <div id="labourExpRows">${labourRows||'<div class="histempty">No labour costs logged yet</div>'}</div>
+    <button class="addbtn" id="addLabourExpBtn" type="button">+ Add labour cost</button>
 
     <div style="border-top:1px solid var(--line);margin:20px 0"></div>
 
@@ -653,41 +669,41 @@ function renderFinanceTab(s){
     <div class="logtbwrap"><table class="logtable"><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Reference</th><th></th></tr></thead>
     <tbody>${depRows||'<tr><td colspan="5" class="histempty">No deposits logged for this site</td></tr>'}</tbody></table></div>`;
 
-  if(showExpenseForm){
-    $("siteModalBody").querySelectorAll("[data-ef]").forEach(el=>el.addEventListener("input",e=>{
-      const f=e.target.dataset.ef;
-      if(f==="unit_cost"){ fmtCommasEl(e.target); eDraft[f]=e.target.value.replace(/,/g,""); }
-      else eDraft[f]=e.target.value;
-      queueExpenseSave(eDraft);
-    }));
-    $("eDone").addEventListener("click",async()=>{
-      if(isExpenseBlank(eDraft)){
-        await SB.from("project_site_expenses").delete().eq("id",eDraft.id);
-        expenses=expenses.filter(x=>x.id!==eDraft.id);
-      }
-      showExpenseForm=false; editingExpenseId=null; renderFinanceTab(s);
+  $("mainExpDate").addEventListener("input",e=>{mainExpDate=e.target.value||today();});
+  $("labourExpDate").addEventListener("input",e=>{labourExpDate=e.target.value||today();});
+  function wireExpRows(container){
+    container.querySelectorAll("[data-xid]").forEach(row=>{
+      const rec=expenses.find(x=>x.id===row.dataset.xid); if(!rec)return;
+      row.querySelectorAll("[data-xf]").forEach(el=>el.addEventListener("input",ev=>{
+        const f=ev.target.dataset.xf;
+        if(f==="unit_cost"){ fmtCommasEl(ev.target); rec[f]=ev.target.value.replace(/,/g,""); }
+        else rec[f]=ev.target.value;
+        queueExpenseSave(rec);
+      }));
     });
-  } else {
-    $("addExpenseBtn").addEventListener("click",async()=>{
-      const {data,error}=await SB.from("project_site_expenses").insert({site_id:s.id,created_by:currentUserEmail}).select("*").single();
-      if(error){alert("Could not create expense: "+error.message);return;}
-      expenses.push(data);
-      eDraft=data; editingExpenseId=data.id; showExpenseForm=true;
+    container.querySelectorAll("[data-delx]").forEach(b=>b.addEventListener("click",async()=>{
+      if(!isAdmin())return;
+      if(!confirm("Delete this expense record?"))return;
+      const {error}=await SB.from("project_site_expenses").delete().eq("id",b.dataset.delx);
+      if(error){alert("Could not delete: "+error.message);return;}
+      expenses=expenses.filter(x=>x.id!==b.dataset.delx);
       renderFinanceTab(s);
-    });
+    }));
   }
-  $("siteModalBody").querySelectorAll("[data-edite]").forEach(b=>b.addEventListener("click",()=>{
-    const e=expenses.find(x=>x.id===b.dataset.edite); if(!e)return;
-    eDraft=e; editingExpenseId=e.id; showExpenseForm=true; renderFinanceTab(s);
-  }));
-  $("siteModalBody").querySelectorAll("[data-dele]").forEach(b=>b.addEventListener("click",async()=>{
-    if(!isAdmin())return;
-    if(!confirm("Delete this expense record?"))return;
-    const {error}=await SB.from("project_site_expenses").delete().eq("id",b.dataset.dele);
-    if(error){alert("Could not delete: "+error.message);return;}
-    expenses=expenses.filter(x=>x.id!==b.dataset.dele);
+  wireExpRows($("mainExpRows"));
+  wireExpRows($("labourExpRows"));
+  $("addMainExpBtn").addEventListener("click",async()=>{
+    const {data,error}=await SB.from("project_site_expenses").insert({site_id:s.id,category:"Equipment",expense_date:mainExpDate,created_by:currentUserEmail}).select("*").single();
+    if(error){alert("Could not add item: "+error.message);return;}
+    expenses.push(data);
     renderFinanceTab(s);
-  }));
+  });
+  $("addLabourExpBtn").addEventListener("click",async()=>{
+    const {data,error}=await SB.from("project_site_expenses").insert({site_id:s.id,category:"Installer Labour",expense_date:labourExpDate,created_by:currentUserEmail}).select("*").single();
+    if(error){alert("Could not add labour cost: "+error.message);return;}
+    expenses.push(data);
+    renderFinanceTab(s);
+  });
 
   if(showDepositForm){
     $("siteModalBody").querySelectorAll("[data-df]").forEach(el=>el.addEventListener("input",e=>{
@@ -761,9 +777,10 @@ async function cleanupBlankDrafts(){
     await SB.from("project_site_maintenance").delete().eq("id",editingMaintId);
     maintenance=maintenance.filter(x=>x.id!==editingMaintId);
   }
-  if(showExpenseForm && editingExpenseId && isExpenseBlank(eDraft)){
-    await SB.from("project_site_expenses").delete().eq("id",editingExpenseId);
-    expenses=expenses.filter(x=>x.id!==editingExpenseId);
+  if(currentSiteId){
+    const blanks=expenses.filter(e=>e.site_id===currentSiteId && isExpenseBlank(e));
+    for(const e of blanks){ await SB.from("project_site_expenses").delete().eq("id",e.id); }
+    if(blanks.length){ const ids=new Set(blanks.map(e=>e.id)); expenses=expenses.filter(e=>!ids.has(e.id)); }
   }
   if(showDepositForm && editingDepositId && isDepositBlank(dDraft)){
     await SB.from("project_site_deposits").delete().eq("id",editingDepositId);
@@ -778,9 +795,9 @@ function docHTML_SiteReport(s){
   const eList=expenses.filter(e=>e.site_id===s.id).slice().sort((a,b)=>(a.expense_date||"").localeCompare(b.expense_date||""));
   const dList=deposits.filter(d=>d.site_id===s.id).slice().sort((a,b)=>(a.deposit_date||"").localeCompare(b.deposit_date||""));
   const catTotal=cat=>eList.filter(e=>e.category===cat).reduce((sum,e)=>sum+Number(e.amount||0),0);
-  const equipTotal=catTotal("Equipment"), labourTotal=catTotal("Installer Labour"), miscTotal=catTotal("Miscellaneous");
+  const equipTotal=catTotal("Equipment"), logisticsTotal=catTotal("Logistics"), labourTotal=catTotal("Installer Labour"), miscTotal=catTotal("Miscellaneous");
   const maintTotal=mList.reduce((sum,m)=>sum+Number(m.cost||0),0);
-  const expenseTotal=equipTotal+labourTotal+miscTotal+maintTotal;
+  const expenseTotal=equipTotal+logisticsTotal+labourTotal+miscTotal+maintTotal;
   const depositTotal=dList.reduce((sum,d)=>sum+Number(d.amount||0),0);
   const projectCost=Number(s.project_cost||0);
   const netMargin=projectCost-expenseTotal;
@@ -818,6 +835,7 @@ function docHTML_SiteReport(s){
       <thead><tr><th class="l">Cost breakdown</th><th>Amount</th></tr></thead>
       <tbody>
         <tr><td class="l">Equipment</td><td>${ngn.format(equipTotal)}</td></tr>
+        <tr><td class="l">Logistics</td><td>${ngn.format(logisticsTotal)}</td></tr>
         <tr><td class="l">Installer labour</td><td>${ngn.format(labourTotal)}</td></tr>
         <tr><td class="l">Miscellaneous</td><td>${ngn.format(miscTotal)}</td></tr>
         <tr><td class="l">Maintenance</td><td>${ngn.format(maintTotal)}</td></tr>

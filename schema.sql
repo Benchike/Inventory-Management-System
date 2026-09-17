@@ -1029,7 +1029,7 @@ create table if not exists public.project_site_expenses (
   id           uuid primary key default gen_random_uuid(),
   site_id      uuid not null references public.project_sites(id) on delete cascade,
   expense_date date not null default current_date,
-  category     text not null default 'Equipment' check (category in ('Equipment','Installer Labour','Miscellaneous')),
+  category     text not null default 'Equipment' check (category in ('Equipment','Logistics','Installer Labour','Miscellaneous')),
   description  text not null default '',
   qty          numeric not null default 1,
   unit_cost    numeric not null default 0,
@@ -1039,6 +1039,17 @@ create table if not exists public.project_site_expenses (
   updated_at   timestamptz default now()
 );
 create index if not exists project_site_expenses_site_idx on public.project_site_expenses (site_id, expense_date desc);
+
+do $$
+declare r record;
+begin
+  for r in (select conname from pg_constraint where conrelid = 'public.project_site_expenses'::regclass and contype = 'c')
+  loop
+    execute format('alter table public.project_site_expenses drop constraint %I', r.conname);
+  end loop;
+end $$;
+alter table public.project_site_expenses add constraint project_site_expenses_category_check
+  check (category in ('Equipment','Logistics','Installer Labour','Miscellaneous'));
 
 create table if not exists public.project_site_deposits (
   id           uuid primary key default gen_random_uuid(),
