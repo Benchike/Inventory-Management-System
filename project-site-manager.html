@@ -391,7 +391,7 @@ async function saveSiteNow(s){
   const row={shop_location:s.shop_location||"", state_region:s.state_region||"", contact_person:s.contact_person||"",
     phone_number:s.phone_number||"", stage:s.stage||"Site Survey",
     survey_date:s.survey_date||null, install_start_date:s.install_start_date||null,
-    install_complete_date:s.install_complete_date||null, commissioning_date:s.commissioning_date||null,
+    commissioning_date:s.commissioning_date||null,
     pre_install_media_link:s.pre_install_media_link||"", post_install_media_link:s.post_install_media_link||"", notes:s.notes||"",
     project_cost:Number(s.project_cost)||0};
   const {error}=await SB.from("project_sites").update(row).eq("id",s.id);
@@ -409,8 +409,7 @@ function renderOverviewTab(s){
       <div><span class="lab">Project cost <small>(contract price to customer)</small></span><input type="number" step="0.01" data-f="project_cost" value="${s.project_cost||0}"></div></div>
     <div class="row2 mb"><div><span class="lab">Site survey date</span><input type="date" data-f="survey_date" value="${s.survey_date||''}"></div>
       <div><span class="lab">Installation start date</span><input type="date" data-f="install_start_date" value="${s.install_start_date||''}"></div></div>
-    <div class="row2 mb"><div><span class="lab">Installation complete date</span><input type="date" data-f="install_complete_date" value="${s.install_complete_date||''}"></div>
-      <div><span class="lab">Commissioning date</span><input type="date" data-f="commissioning_date" value="${s.commissioning_date||''}"></div></div>
+    <div class="mb"><span class="lab">Commissioning date</span><input type="date" data-f="commissioning_date" value="${s.commissioning_date||''}"></div>
     <div class="mb"><span class="lab">Notes</span><textarea data-f="notes" style="min-height:70px">${esc(s.notes)}</textarea></div>`;
   $("siteModalBody").querySelectorAll("[data-f]").forEach(el=>el.addEventListener("input",e=>{
     s[e.target.dataset.f]=e.target.value;
@@ -790,7 +789,6 @@ function docHTML_SiteReport(s){
       <tbody>
         <tr><td class="l">Site survey</td><td class="l">${fmtDate(s.survey_date)||'—'}</td></tr>
         <tr><td class="l">Installation start</td><td class="l">${fmtDate(s.install_start_date)||'—'}</td></tr>
-        <tr><td class="l">Installation complete</td><td class="l">${fmtDate(s.install_complete_date)||'—'}</td></tr>
         <tr><td class="l">Commissioning</td><td class="l">${fmtDate(s.commissioning_date)||'—'}</td></tr>
       </tbody></table>
     ${s.notes?`<div style="margin-top:6px;font-size:11.5px"><b>Notes:</b> ${esc(s.notes)}</div>`:''}
