@@ -593,7 +593,7 @@ function renderMaintenanceTab(s){
 /* ---- Finance ---- */
 const MAIN_EXP_CATS=["Equipment","Logistics","Miscellaneous"];
 function renderFinanceTab(s){
-  const exp=expenses.filter(e=>e.site_id===s.id).slice().sort((a,b)=>(b.expense_date||"").localeCompare(a.expense_date||""));
+  const exp=expenses.filter(e=>e.site_id===s.id).slice().sort((a,b)=>(a.created_at||"").localeCompare(b.created_at||""));
   const mainExp=exp.filter(e=>e.category!=="Installer Labour");
   const labourExp=exp.filter(e=>e.category==="Installer Labour");
   const dep=deposits.filter(d=>d.site_id===s.id).slice().sort((a,b)=>(b.deposit_date||"").localeCompare(a.deposit_date||""));
