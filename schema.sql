@@ -945,6 +945,9 @@ create table if not exists public.project_sites (
 alter table public.project_sites add column if not exists pre_install_media_link  text default '';
 alter table public.project_sites add column if not exists post_install_media_link text default '';
 
+-- Collapsed into a single link covering all site photos/videos (old columns above kept, unused).
+alter table public.project_sites add column if not exists media_link text default '';
+
 create index if not exists project_sites_stage_idx on public.project_sites (stage);
 
 create table if not exists public.project_site_counters (

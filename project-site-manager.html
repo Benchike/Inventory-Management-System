@@ -345,7 +345,7 @@ async function closeSiteModal(){
   await cleanupBlankDrafts();
   const s=sites.find(x=>x.id===currentSiteId);
   if(s && !s.shop_location && !s.contact_person && !s.phone_number && !Number(s.project_cost) &&
-     !s.pre_install_media_link && !s.post_install_media_link &&
+     !s.media_link &&
      !complaints.some(c=>c.site_id===s.id) && !maintenance.some(m=>m.site_id===s.id) &&
      !expenses.some(e=>e.site_id===s.id) && !deposits.some(d=>d.site_id===s.id)){
     await SB.from("project_sites").delete().eq("id",s.id);
@@ -401,7 +401,7 @@ async function saveSiteNow(s){
     phone_number:s.phone_number||"", stage:s.stage||"Site Survey",
     survey_date:s.survey_date||null, install_start_date:s.install_start_date||null,
     commissioning_date:s.commissioning_date||null,
-    pre_install_media_link:s.pre_install_media_link||"", post_install_media_link:s.post_install_media_link||"", notes:s.notes||"",
+    media_link:s.media_link||"", notes:s.notes||"",
     project_cost:Number(s.project_cost)||0};
   const {error}=await SB.from("project_sites").update(row).eq("id",s.id);
   if(error) console.error("site save error",error);
@@ -433,10 +433,8 @@ function renderOverviewTab(s){
 function renderMediaTab(s){
   $("siteModalBody").innerHTML=`
     <div class="autonote">Saves automatically as you type</div>
-    <div class="mb"><span class="lab">Pre-installation media link <small>— link to photos/videos from before the site visit (e.g. a Google Drive or Photos album)</small></span>
-      <input type="url" data-f="pre_install_media_link" value="${esc(s.pre_install_media_link)}" placeholder="https://…"></div>
-    <div><span class="lab">Post-installation media link <small>— link to reference photos/videos once commissioned</small></span>
-      <input type="url" data-f="post_install_media_link" value="${esc(s.post_install_media_link)}" placeholder="https://…"></div>`;
+    <div><span class="lab">Site media link <small>— link to all photos/videos for this site (e.g. a shared Google Drive or Photos album)</small></span>
+      <input type="url" data-f="media_link" value="${esc(s.media_link)}" placeholder="https://…"></div>`;
   $("siteModalBody").querySelectorAll("[data-f]").forEach(el=>el.addEventListener("input",e=>{
     s[e.target.dataset.f]=e.target.value;
     queueSiteSave(s);
@@ -787,7 +785,7 @@ function docHTML_SiteReport(s){
   const projectCost=Number(s.project_cost||0);
   const netMargin=projectCost-expenseTotal;
   const marginPct=projectCost>0?(netMargin/projectCost*100).toFixed(1)+"%":"—";
-  const mediaLink=(url,label)=> url ? `<div class="rep-h">${label}</div><div style="font-size:11.5px"><a href="${esc(url)}">${esc(url)}</a></div>` : "";
+  const mediaLink=s.media_link ? `<div class="rep-h">Site Media</div><div style="font-size:11.5px"><a href="${esc(s.media_link)}">${esc(s.media_link)}</a></div>` : "";
   const cRows=cList.map(c=>`<tr><td class="c">${fmtDate(c.date_reported)}</td><td class="l">${esc(c.description)}</td><td class="c">${esc(c.status)}</td><td class="l">${esc(c.resolution_notes)||'—'}</td></tr>`).join("");
   const mRows=mList.map(m=>`<tr><td class="c">${fmtDate(m.visit_date)}</td><td class="c">${esc(m.visit_type)}</td><td class="l">${esc(m.technician)||'—'}</td><td class="l">${esc(m.notes)||'—'}</td><td class="r">${ngn.format(Number(m.cost||0))}</td></tr>`).join("");
   const eRows=eList.map(e=>`<tr><td class="c">${fmtDate(e.expense_date)}</td><td class="c">${esc(e.category)}</td><td class="l">${esc(e.description)||'—'}</td><td class="r">${ngn.format(Number(e.amount||0))}</td></tr>`).join("");
@@ -830,8 +828,7 @@ function docHTML_SiteReport(s){
     ${dRows?`<div class="rep-h">Customer Deposits</div><table class="doc"><colgroup><col style="width:70px"><col><col><col style="width:100px"></colgroup>
       <thead><tr><th class="c">Date</th><th class="l">Method</th><th class="l">Reference</th><th>Amount</th></tr></thead>
       <tbody>${dRows}</tbody></table>`:''}
-    ${mediaLink(s.pre_install_media_link,"Pre-Installation Media")}
-    ${mediaLink(s.post_install_media_link,"Post-Installation Media")}
+    ${mediaLink}
     <div class="rep-h">Complaints Log</div>
     <table class="doc"><colgroup><col style="width:70px"><col><col style="width:80px"><col></colgroup>
       <thead><tr><th class="c">Date</th><th class="l">Description</th><th class="c">Status</th><th class="l">Resolution</th></tr></thead>
