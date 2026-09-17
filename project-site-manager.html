@@ -224,6 +224,15 @@ const esc=s=>(s||"").toString().replace(/</g,"&lt;").replace(/"/g,"&quot;");
 const ngn=new Intl.NumberFormat("en-NG",{style:"currency",currency:"NGN",maximumFractionDigits:0});
 function today(){ return new Date().toISOString().slice(0,10); }
 function fmtDate(s){ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}); }
+function fmtCommasEl(el){
+  const sel=el.selectionStart;
+  const before=el.value.slice(0,sel).replace(/[^\d]/g,"").length;
+  const digits=el.value.replace(/[^\d]/g,"");
+  if(!digits){el.value="";return;}
+  const f=Number(digits).toLocaleString("en-US"); el.value=f;
+  let count=0,pos=0; for(;pos<f.length&&count<before;pos++){if(/\d/.test(f[pos]))count++;}
+  try{el.setSelectionRange(pos,pos);}catch(e){}
+}
 const CO={name:"Kiru Energy Ltd",rc:"RC 1619891",addr:"44 Bourdillon Road, Ikoyi, Lagos, Nigeria",
   email:"Business@ourkiru.com",phone:"+234-813-026-6232",web:"www.ourkiru.com"};
 function docHead(title,metaHTML){
@@ -406,13 +415,15 @@ function renderOverviewTab(s){
     <div class="row2 mb"><div><span class="lab">Contact person</span><input data-f="contact_person" value="${esc(s.contact_person)}"></div>
       <div><span class="lab">Phone number</span><input data-f="phone_number" value="${esc(s.phone_number)}"></div></div>
     <div class="row2 mb"><div><span class="lab">Stage</span><select data-f="stage">${STAGES.map(t=>`<option ${t===s.stage?'selected':''}>${t}</option>`).join("")}</select></div>
-      <div><span class="lab">Project cost <small>(contract price to customer)</small></span><input type="number" step="0.01" data-f="project_cost" value="${s.project_cost||0}"></div></div>
+      <div><span class="lab">Project cost <small>(contract price to customer)</small></span><input type="text" inputmode="numeric" data-f="project_cost" value="${s.project_cost?Number(s.project_cost).toLocaleString('en-US'):''}"></div></div>
     <div class="row2 mb"><div><span class="lab">Site survey date</span><input type="date" data-f="survey_date" value="${s.survey_date||''}"></div>
       <div><span class="lab">Installation start date</span><input type="date" data-f="install_start_date" value="${s.install_start_date||''}"></div></div>
     <div class="mb"><span class="lab">Commissioning date</span><input type="date" data-f="commissioning_date" value="${s.commissioning_date||''}"></div>
     <div class="mb"><span class="lab">Notes</span><textarea data-f="notes" style="min-height:70px">${esc(s.notes)}</textarea></div>`;
   $("siteModalBody").querySelectorAll("[data-f]").forEach(el=>el.addEventListener("input",e=>{
-    s[e.target.dataset.f]=e.target.value;
+    const f=e.target.dataset.f;
+    if(f==="project_cost"){ fmtCommasEl(e.target); s[f]=e.target.value.replace(/,/g,""); }
+    else s[f]=e.target.value;
     $("siteModalTitle").textContent=s.site_no+(s.shop_location?" — "+s.shop_location:"");
     queueSiteSave(s);
   }));
@@ -523,7 +534,7 @@ function renderMaintenanceTab(s){
       <div class="row2 mb"><div><span class="lab">Technician</span><input data-mf="technician" value="${esc(mDraft.technician||'')}"></div>
         <div><span class="lab">Next visit due <small>(optional)</small></span><input type="date" data-mf="next_visit_due" value="${mDraft.next_visit_due||''}"></div></div>
       <div class="row2 mb"><div><span class="lab">What was fixed</span><textarea data-mf="notes" style="min-height:60px">${esc(mDraft.notes||'')}</textarea></div>
-        <div><span class="lab">Cost of visit</span><input type="number" step="0.01" data-mf="cost" value="${mDraft.cost||0}"></div></div>
+        <div><span class="lab">Cost of visit</span><input type="text" inputmode="numeric" data-mf="cost" value="${mDraft.cost?Number(mDraft.cost).toLocaleString('en-US'):''}"></div></div>
       <div style="display:flex;gap:8px;margin-top:10px"><button class="ghostbtn" id="mDone" type="button">Done</button></div>
     </div>`:`<button class="newbtn" id="addMaintBtn" type="button" style="margin:6px 0 14px">+ Log maintenance visit</button>`;
   const rows=list.map(m=>`<tr>
@@ -537,7 +548,9 @@ function renderMaintenanceTab(s){
     <tbody>${rows||'<tr><td colspan="6" class="histempty">No maintenance visits logged for this site</td></tr>'}</tbody></table></div>`;
   if(showMaintForm){
     $("siteModalBody").querySelectorAll("[data-mf]").forEach(el=>el.addEventListener("input",e=>{
-      mDraft[e.target.dataset.mf]=e.target.value;
+      const f=e.target.dataset.mf;
+      if(f==="cost"){ fmtCommasEl(e.target); mDraft[f]=e.target.value.replace(/,/g,""); }
+      else mDraft[f]=e.target.value;
       queueMaintSave(mDraft);
     }));
     $("mDone").addEventListener("click",async()=>{
@@ -593,7 +606,7 @@ function renderFinanceTab(s){
         <div><span class="lab">Category</span><select data-ef="category">${EXP_CATS.map(c=>`<option ${eDraft.category===c?'selected':''}>${c}</option>`).join("")}</select></div></div>
       <div class="mb"><span class="lab">Description</span><input data-ef="description" value="${esc(eDraft.description||'')}"></div>
       <div class="row2 mb"><div><span class="lab">Qty</span><input type="number" step="0.01" data-ef="qty" value="${eDraft.qty||1}"></div>
-        <div><span class="lab">Unit cost</span><input type="number" step="0.01" data-ef="unit_cost" value="${eDraft.unit_cost||0}"></div></div>
+        <div><span class="lab">Unit cost</span><input type="text" inputmode="numeric" data-ef="unit_cost" value="${eDraft.unit_cost?Number(eDraft.unit_cost).toLocaleString('en-US'):''}"></div></div>
       <div style="display:flex;gap:8px;margin-top:10px"><button class="ghostbtn" id="eDone" type="button">Done</button></div>
     </div>`:`<button class="newbtn" id="addExpenseBtn" type="button" style="margin:6px 0 14px">+ Log expense</button>`;
   const expRows=exp.map(e=>`<tr>
@@ -605,7 +618,7 @@ function renderFinanceTab(s){
   const depFormHTML=showDepositForm?`<div class="card" style="padding:14px;margin:6px 0 14px">
       <div class="autonote">Saves automatically as you type</div>
       <div class="row2 mb"><div><span class="lab">Date</span><input type="date" data-df="deposit_date" value="${dDraft.deposit_date||today()}"></div>
-        <div><span class="lab">Amount</span><input type="number" step="0.01" data-df="amount" value="${dDraft.amount||0}"></div></div>
+        <div><span class="lab">Amount</span><input type="text" inputmode="numeric" data-df="amount" value="${dDraft.amount?Number(dDraft.amount).toLocaleString('en-US'):''}"></div></div>
       <div class="row2 mb"><div><span class="lab">Method <small>(optional)</small></span><input data-df="method" value="${esc(dDraft.method||'')}"></div>
         <div><span class="lab">Reference <small>(optional)</small></span><input data-df="reference" value="${esc(dDraft.reference||'')}"></div></div>
       <div><span class="lab">Notes <small>(optional)</small></span><textarea data-df="notes" style="min-height:50px">${esc(dDraft.notes||'')}</textarea></div>
@@ -644,7 +657,9 @@ function renderFinanceTab(s){
 
   if(showExpenseForm){
     $("siteModalBody").querySelectorAll("[data-ef]").forEach(el=>el.addEventListener("input",e=>{
-      eDraft[e.target.dataset.ef]=e.target.value;
+      const f=e.target.dataset.ef;
+      if(f==="unit_cost"){ fmtCommasEl(e.target); eDraft[f]=e.target.value.replace(/,/g,""); }
+      else eDraft[f]=e.target.value;
       queueExpenseSave(eDraft);
     }));
     $("eDone").addEventListener("click",async()=>{
@@ -678,7 +693,9 @@ function renderFinanceTab(s){
 
   if(showDepositForm){
     $("siteModalBody").querySelectorAll("[data-df]").forEach(el=>el.addEventListener("input",e=>{
-      dDraft[e.target.dataset.df]=e.target.value;
+      const f=e.target.dataset.df;
+      if(f==="amount"){ fmtCommasEl(e.target); dDraft[f]=e.target.value.replace(/,/g,""); }
+      else dDraft[f]=e.target.value;
       queueDepositSave(dDraft);
     }));
     $("dDone").addEventListener("click",async()=>{
