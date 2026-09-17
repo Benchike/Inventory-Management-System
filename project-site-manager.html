@@ -81,8 +81,9 @@ window.KIRU_CONFIG = {
 
   .autonote{font-size:.68rem;color:var(--muted);margin-bottom:10px;font-weight:600}
 
-  .expgrid{display:grid;grid-template-columns:1fr 64px 104px 30px;gap:6px;align-items:center;margin-bottom:6px}
+  .expgrid{display:grid;grid-template-columns:1fr 104px 30px;gap:6px;align-items:center;margin-bottom:6px}
   .expgrid.cat{grid-template-columns:130px 1fr 64px 104px 30px}
+  .expgrid.labour{grid-template-columns:1fr 140px 30px}
   .exphead{font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;margin-bottom:6px}
   .expgrid input,.expgrid select{padding:8px 8px;font-size:.8rem}
   .expgrid .num{text-align:right}
@@ -609,15 +610,20 @@ function renderFinanceTab(s){
   const marginPct=projectCost>0?(netMargin/projectCost*100):0;
   const balanceDue=projectCost-depositTotal;
 
-  const expRowHTML=(e,withCat)=>`<div class="expgrid${withCat?' cat':''}" data-xid="${e.id}">
-      ${withCat?`<select data-xf="category">${MAIN_EXP_CATS.map(c=>`<option ${e.category===c?'selected':''}>${c}</option>`).join("")}</select>`:''}
+  const mainRowHTML=e=>`<div class="expgrid cat" data-xid="${e.id}">
+      <select data-xf="category">${MAIN_EXP_CATS.map(c=>`<option ${e.category===c?'selected':''}>${c}</option>`).join("")}</select>
       <input type="text" data-xf="description" value="${esc(e.description)}" placeholder="Description">
       <input type="text" data-xf="qty" value="${esc(e.qty!=null?e.qty:'')}" placeholder="1 / Lot">
       <input type="text" inputmode="numeric" class="num" data-xf="unit_cost" value="${e.unit_cost?Number(e.unit_cost).toLocaleString('en-US'):''}" placeholder="0">
       ${isAdmin()?`<button class="xdel" type="button" data-delx="${e.id}">✕</button>`:'<span></span>'}
     </div>`;
-  const mainRows=mainExp.map(e=>expRowHTML(e,true)).join("");
-  const labourRows=labourExp.map(e=>expRowHTML(e,false)).join("");
+  const labourRowHTML=e=>`<div class="expgrid labour" data-xid="${e.id}">
+      <input type="text" data-xf="description" value="${esc(e.description)}" placeholder="Staff name">
+      <input type="text" inputmode="numeric" class="num" data-xf="unit_cost" value="${e.unit_cost?Number(e.unit_cost).toLocaleString('en-US'):''}" placeholder="Amount paid">
+      ${isAdmin()?`<button class="xdel" type="button" data-delx="${e.id}">✕</button>`:'<span></span>'}
+    </div>`;
+  const mainRows=mainExp.map(mainRowHTML).join("");
+  const labourRows=labourExp.map(labourRowHTML).join("");
 
   const depFormHTML=showDepositForm?`<div class="card" style="padding:14px;margin:6px 0 14px">
       <div class="autonote">Saves automatically as you type</div>
@@ -658,7 +664,7 @@ function renderFinanceTab(s){
 
     <h2>Installer Labour</h2>
     <div class="mb" style="max-width:220px"><span class="lab">Date <small>(applied to items added below)</small></span><input type="date" id="labourExpDate" value="${labourExpDate}"></div>
-    <div class="expgrid exphead"><span>Description</span><span>Qty</span><span>Unit cost</span><span></span></div>
+    <div class="expgrid labour exphead"><span>Staff name</span><span>Amount paid</span><span></span></div>
     <div id="labourExpRows">${labourRows||'<div class="histempty">No labour costs logged yet</div>'}</div>
     <button class="addbtn" id="addLabourExpBtn" type="button">+ Add labour cost</button>
 
@@ -749,10 +755,15 @@ function queueExpenseSave(e){
 function isLotQty(v){ return typeof v==="string" && v.trim().toLowerCase()==="lot"; }
 async function saveExpenseNow(e){
   const unit=Number(e.unit_cost)||0;
-  const lot=isLotQty(e.qty);
-  const qtyRaw=(e.qty===undefined||e.qty===null)?"":e.qty.toString().trim();
-  const qty=qtyRaw===""?"1":qtyRaw;
-  const amount=lot?unit:(parseFloat(qty)||0)*unit;
+  let qty, amount;
+  if(e.category==="Installer Labour"){
+    qty="1"; amount=unit;
+  } else {
+    const lot=isLotQty(e.qty);
+    const qtyRaw=(e.qty===undefined||e.qty===null)?"":e.qty.toString().trim();
+    qty=qtyRaw===""?"1":qtyRaw;
+    amount=lot?unit:(parseFloat(qty)||0)*unit;
+  }
   const row={expense_date:e.expense_date||today(), category:e.category||"Equipment", description:e.description||"",
     qty, unit_cost:unit, amount};
   const {error}=await SB.from("project_site_expenses").update(row).eq("id",e.id);
