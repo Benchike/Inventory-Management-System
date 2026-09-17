@@ -1031,7 +1031,7 @@ create table if not exists public.project_site_expenses (
   expense_date date not null default current_date,
   category     text not null default 'Equipment' check (category in ('Equipment','Logistics','Installer Labour','Miscellaneous')),
   description  text not null default '',
-  qty          numeric not null default 1,
+  qty          text not null default '1',
   unit_cost    numeric not null default 0,
   amount       numeric not null default 0,
   created_by   text default '',
@@ -1039,6 +1039,10 @@ create table if not exists public.project_site_expenses (
   updated_at   timestamptz default now()
 );
 create index if not exists project_site_expenses_site_idx on public.project_site_expenses (site_id, expense_date desc);
+
+alter table public.project_site_expenses
+  alter column qty type text using qty::text,
+  alter column qty set default '1';
 
 do $$
 declare r record;

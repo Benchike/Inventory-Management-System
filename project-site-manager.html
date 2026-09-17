@@ -612,7 +612,7 @@ function renderFinanceTab(s){
   const expRowHTML=(e,withCat)=>`<div class="expgrid${withCat?' cat':''}" data-xid="${e.id}">
       ${withCat?`<select data-xf="category">${MAIN_EXP_CATS.map(c=>`<option ${e.category===c?'selected':''}>${c}</option>`).join("")}</select>`:''}
       <input type="text" data-xf="description" value="${esc(e.description)}" placeholder="Description">
-      <input type="number" data-xf="qty" value="${e.qty||''}" placeholder="1">
+      <input type="text" data-xf="qty" value="${esc(e.qty!=null?e.qty:'')}" placeholder="1 / Lot">
       <input type="text" inputmode="numeric" class="num" data-xf="unit_cost" value="${e.unit_cost?Number(e.unit_cost).toLocaleString('en-US'):''}" placeholder="0">
       ${isAdmin()?`<button class="xdel" type="button" data-delx="${e.id}">✕</button>`:'<span></span>'}
     </div>`;
@@ -746,10 +746,15 @@ function queueExpenseSave(e){
   clearTimeout(expenseSaveTimers[e.id]);
   expenseSaveTimers[e.id]=setTimeout(()=>saveExpenseNow(e),700);
 }
+function isLotQty(v){ return typeof v==="string" && v.trim().toLowerCase()==="lot"; }
 async function saveExpenseNow(e){
-  const qty=Number(e.qty)||0, unit=Number(e.unit_cost)||0;
+  const unit=Number(e.unit_cost)||0;
+  const lot=isLotQty(e.qty);
+  const qtyRaw=(e.qty===undefined||e.qty===null)?"":e.qty.toString().trim();
+  const qty=qtyRaw===""?"1":qtyRaw;
+  const amount=lot?unit:(parseFloat(qty)||0)*unit;
   const row={expense_date:e.expense_date||today(), category:e.category||"Equipment", description:e.description||"",
-    qty, unit_cost:unit, amount:qty*unit};
+    qty, unit_cost:unit, amount};
   const {error}=await SB.from("project_site_expenses").update(row).eq("id",e.id);
   if(error){ console.error("expense save error",error); return; }
   Object.assign(e,row);
