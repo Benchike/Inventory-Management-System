@@ -76,6 +76,7 @@
   .linehead,.lineitem{display:grid;gap:7px;align-items:center}
   .linehead.cols-po,.lineitem.cols-po{grid-template-columns:1fr 70px 110px 32px}
   .linehead.cols-mro,.lineitem.cols-mro{grid-template-columns:1fr 55px 80px 100px 32px}
+  .linehead.cols-log,.lineitem.cols-log{grid-template-columns:1fr 130px 32px}
   .linehead span{font-size:.6rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700}
   .linehead span:not(:first-child){text-align:center}
   .lineitem{margin-bottom:7px}.lineitem .num{text-align:right}
@@ -326,7 +327,7 @@ function docToLocal(d){
   const base={id:d.id,no:d.no,date:d.doc_date,note:d.note||"",lines:d.lines||[],
     preparedBy:d.prepared_by||"",approvedBy:d.approved_by||"",approverTitle:d.approver_title||"",
     sig:d.signature||"",status:d.status,createdBy:d.created_by||""};
-  if(d.kind==="po")return Object.assign(base,{supplier:d.supplier||"",receivedDate:d.applied_date,paymentReceipt:d.payment_receipt||""});
+  if(d.kind==="po")return Object.assign(base,{supplier:d.supplier||"",receivedDate:d.applied_date,paymentReceipt:d.payment_receipt||"",logistics:Array.isArray(d.logistics)?d.logistics:[]});
   return Object.assign(base,{requestedBy:d.requested_by||"",project:d.project||"",purpose:d.purpose||"",issuedDate:d.applied_date});
 }
 async function pull(){
@@ -363,7 +364,7 @@ async function saveDocDB(kind,d){
   const row={kind,no:noData,doc_date:d.date,status:"draft",note:d.note||"",lines:d.lines,
     prepared_by:d.preparedBy||"",approved_by:d.approvedBy||"",approver_title:d.approverTitle||"",
     signature:d.sig||"",created_by:(USER&&USER.email)||""};
-  if(kind==="po")row.supplier=d.supplier||""; else {row.requested_by=d.requestedBy||"";row.project=d.project||"";row.purpose=d.purpose||"";}
+  if(kind==="po"){row.supplier=d.supplier||""; if((d.logistics||[]).length)row.logistics=d.logistics;} else {row.requested_by=d.requestedBy||"";row.project=d.project||"";row.purpose=d.purpose||"";}
   const {error}=await SB.from(tbl("documents")).insert(row);
   if(error){toast("Save failed: "+error.message);return null;}
   await pull(); return noData;
@@ -380,6 +381,7 @@ async function updatePODB(d){
   const row={doc_date:d.date,note:d.note||"",lines:d.lines,
     supplier:d.supplier||"",
     approved_by:d.approvedBy||"",approver_title:d.approverTitle||"",signature:d.sig||""};
+  if((d.logistics||[]).length||d._hadLogistics)row.logistics=d.logistics||[];
   const {error}=await SB.from(tbl("documents")).update(row).eq("id",d.id).eq("status","draft");
   if(error){toast("Update failed: "+error.message);return false;}
   await pull(); return true;
@@ -962,6 +964,11 @@ function docTotalFromStock(){return draft.lines.reduce((s,l)=>{
 },0);}
 function updateDocTotal(kind){
   const el=$("docTotal"); if(!el)return;
+  if(kind==="po"){ const it=docTotal(), lt=logisticsTotal(draft.logistics);
+    el.textContent=ngn.format(it+lt);
+    if($("itemsTotal"))$("itemsTotal").textContent=ngn.format(it);
+    if($("logTotal"))$("logTotal").textContent=ngn.format(lt);
+    return; }
   el.textContent = kind==="po" ? ngn.format(docTotal())
     : `${draft.lines.length} line${draft.lines.length===1?'':'s'} · ${ngn.format(docTotalFromStock())}`;
 }
@@ -1011,10 +1018,12 @@ const PO_SORTS=[
   ["value_asc","Value (lowest)"],
   ["status","Status (Draft first)"]
 ];
-function poValue(p){return p.lines.reduce((s,l)=>{
+function poItemsValue(p){return p.lines.reduce((s,l)=>{
   if(l.packageId){ const pkg=pkgById(l.packageId); return s+(l.qty||0)*(pkg?packageCost(pkg):0); }
   return s+(l.qty||0)*(l.cost||0);
 },0);}
+function logisticsTotal(list){return (list||[]).reduce((s,x)=>s+(Number(x.amount)||0),0);}
+function poValue(p){return poItemsValue(p)+logisticsTotal(p.logistics);}
 function sortPos(list){
   const arr=list.slice();
   const cmp=(x,y)=>x.localeCompare(y,undefined,{numeric:true,sensitivity:"base"});
@@ -1073,7 +1082,7 @@ function viewPO(){
   $("expSup").addEventListener("click",openSupplierExportModal);
   $("newPO").addEventListener("click",()=>{
     if(!DB.items.length){toast("Add stock items first");return;}
-    draft={kind:"po",id:uid(),no:"",date:today(),supplier:"",note:"",lines:[{itemId:"",qty:1,cost:0}],preparedBy:"",approvedBy:"",approverTitle:"",sig:null};
+    draft={kind:"po",id:uid(),no:"",date:today(),supplier:"",note:"",lines:[{itemId:"",qty:1,cost:0}],logistics:[],preparedBy:"",approvedBy:"",approverTitle:"",sig:null};
     viewPO();
   });
   $("view").querySelectorAll("[data-recv]").forEach(b=>b.addEventListener("click",()=>receivePO(b.dataset.recv)));
@@ -1087,6 +1096,7 @@ function viewPO(){
     }
     const fresh=DB.pos.find(x=>x.id===b.dataset.editPo); if(!fresh)return;
     draft={kind:"po",id:fresh.id,no:fresh.no,date:fresh.date,supplier:fresh.supplier,note:fresh.note,lines:fresh.lines.map(l=>({...l})),
+      logistics:(fresh.logistics||[]).map(x=>({...x})),_hadLogistics:(fresh.logistics||[]).length>0,
       preparedBy:fresh.preparedBy,approvedBy:fresh.approvedBy,approverTitle:fresh.approverTitle,sig:fresh.sig};
     viewPO();
   }));
@@ -1167,15 +1177,23 @@ function poForm(){
         <div class="btnrow"><button class="btn" id="d_save">${isEdit?"Update purchase order":"Save purchase order"}</button><button class="btn ghost" id="d_cancel">Cancel</button></div>
       </div>
       <div class="card pad">
-        <h3>Items to order</h3><div class="sub">Total: <b id="docTotal">${ngn.format(0)}</b></div>
+        <h3>Items to order</h3><div class="sub">Items: <b id="itemsTotal">${ngn.format(0)}</b> · Logistics: <b id="logTotal">${ngn.format(0)}</b> · PO total: <b id="docTotal">${ngn.format(0)}</b></div>
         ${DB.bosPackages.length?`<div class="mb" style="display:flex;gap:8px;align-items:flex-end">
           <div style="flex:1"><span class="lab">Add from BOS package</span><select id="pkgPick"><option value="">— select package —</option>${DB.bosPackages.map(p=>`<option value="${p.id}">${esc(p.name)} · ${ngn.format(packageCost(p))}</option>`).join("")}</select></div>
           <button class="btn ghost sm" id="pkgAdd" style="height:36px">+ Add</button>
         </div>`:''}
         ${lineEditor("po")}
+        <h3 style="margin-top:22px">Logistics</h3><div class="sub">Transport, haulage, loading, clearing and other delivery costs. Added to the PO total — not to stock item costs.</div>
+        <div class="linehead cols-log"><span>Description</span><span>Amount (₦)</span><span></span></div>
+        <div id="logRows"></div>
+        <button class="btn ghost sm" id="addLog" style="width:100%;border-style:dashed;margin-top:3px">+ Add logistics</button>
       </div>
     </div>`;
-  renderLines("po"); wireSig();
+  renderLines("po"); renderLogistics(); wireSig();
+  $("addLog").addEventListener("click",()=>{
+    draft.logistics.push({desc:"",amount:0}); renderLogistics();
+    const r=$("logRows").querySelectorAll('[data-lf="desc"]'); if(r.length)r[r.length-1].focus();
+  });
   $("d_date").addEventListener("input",e=>draft.date=e.target.value);
   $("d_sup").addEventListener("input",e=>draft.supplier=e.target.value);
   $("d_note").addEventListener("input",e=>draft.note=e.target.value);
@@ -1198,6 +1216,8 @@ function poForm(){
     if(!draft.supplier.trim()){toast("Enter the supplier");return;}
     if(!draft.approvedBy.trim()){toast("Approver name is required");return;}
     draft.lines=lines;
+    draft.logistics=(draft.logistics||[]).filter(x=>(x.desc||"").trim()||(Number(x.amount)||0)>0)
+      .map(x=>({desc:(x.desc||"").trim()||"Logistics",amount:Number(x.amount)||0}));
     if(isEdit){
       const ok=await updatePODB(draft);
       if(ok){toast(draft.no+" updated"); draft=null; viewPO();}
@@ -1206,6 +1226,24 @@ function poForm(){
       if(no){toast("Purchase order "+no+" saved"); draft=null; viewPO();}
     }
   });
+}
+function renderLogistics(){
+  const c=$("logRows"); if(!c)return; c.innerHTML="";
+  draft.logistics.forEach((x,idx)=>{
+    const r=document.createElement("div"); r.className="lineitem cols-log";
+    r.innerHTML=`<input data-i="${idx}" data-lf="desc" value="${esc(x.desc||"")}" placeholder="e.g. Haulage from Lagos to site">
+      <input class="num" type="text" inputmode="numeric" data-i="${idx}" data-lf="amount" value="${x.amount?Number(x.amount).toLocaleString('en-US'):""}" placeholder="0">
+      <button class="delbtn" data-dellog="${idx}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>`;
+    c.appendChild(r);
+  });
+  c.querySelectorAll("input").forEach(el=>el.addEventListener("input",e=>{
+    const i=+e.target.dataset.i;
+    if(e.target.dataset.lf==="amount"){fmtCommasEl(e.target);draft.logistics[i].amount=parseFloat(e.target.value.replace(/,/g,""))||0;}
+    else draft.logistics[i].desc=e.target.value;
+    updateDocTotal("po");
+  }));
+  c.querySelectorAll("[data-dellog]").forEach(b=>b.addEventListener("click",()=>{draft.logistics.splice(+b.dataset.dellog,1);renderLogistics();}));
+  updateDocTotal("po");
 }
 async function receivePO(id){
   const p=DB.pos.find(x=>x.id===id); if(!p||p.status==="received")return;
@@ -1429,10 +1467,17 @@ function poLineRows(p){
       <td class="c">${esc(it?it.unit:"")}</td><td>${n2(l.qty)}</td><td>${ngn.format(l.cost||0)}</td><td>${ngn.format(amt)}</td></tr>`;
   }).join("");
 }
+function poLogisticsRows(p){
+  const log=p.logistics||[]; if(!log.length)return "";
+  return `<tr><td></td><td class="l" style="font-weight:800">Items subtotal</td><td></td><td></td><td></td><td style="font-weight:800">${ngn.format(poItemsValue(p))}</td></tr>
+    <tr><td></td><td class="l" style="font-weight:800;padding-top:10px">LOGISTICS</td><td></td><td></td><td></td><td></td></tr>`+
+    log.map(x=>`<tr><td class="c"></td><td class="l">${esc(x.desc||"Logistics")}</td><td class="c">Lot</td><td>1</td><td>${ngn.format(x.amount||0)}</td><td>${ngn.format(x.amount||0)}</td></tr>`).join("")+
+    `<tr><td></td><td class="l" style="font-weight:800">Logistics subtotal</td><td></td><td></td><td></td><td style="font-weight:800">${ngn.format(logisticsTotal(log))}</td></tr>`;
+}
 function docHTML_PO(p){
   if(!p)return "";
   const total=poValue(p);
-  const rows=poLineRows(p);
+  const rows=poLineRows(p)+poLogisticsRows(p);
   return `<div class="docwrap">
     ${docHead("PURCHASE ORDER",`<b>PO No:</b> ${esc(p.no)}<br><b>Date:</b> ${fmtDate(p.date)}${p.receivedDate?`<br><b>Received:</b> ${fmtDate(p.receivedDate)}`:""}<br><b>Status:</b> ${p.status==="received"?"Received into stock":"Awaiting delivery"}`)}
     <div class="doc-parties">
@@ -1455,7 +1500,7 @@ function docHTML_SupplierReport(suppliers,list){
     const subtotal=pos.reduce((s,p)=>s+poValue(p),0);
     grand+=subtotal;
     const poBlocks=pos.map(p=>{
-      const rows=poLineRows(p);
+      const rows=poLineRows(p)+poLogisticsRows(p);
       return `<div style="margin-top:12px;padding:10px 12px;border:1px solid #e6ebf1;border-radius:8px;background:#fbfdff">
         <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;font-size:11.5px">
           <div><b>${esc(p.no)}</b> &middot; ${fmtDate(p.date)}${p.receivedDate?` &middot; Received ${fmtDate(p.receivedDate)}`:""}</div>

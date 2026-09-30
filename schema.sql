@@ -50,6 +50,7 @@ create table if not exists public.documents (
 -- Safe column additions for existing deployments
 alter table public.documents add column if not exists payment_receipt text default '';
 alter table public.documents add column if not exists purpose text default '';
+alter table public.documents add column if not exists logistics jsonb not null default '[]'::jsonb;
 
 create table if not exists public.counters (
   kind  text primary key,
@@ -452,6 +453,7 @@ create table if not exists public.lif_documents (
   created_by     text default '',
   created_at     timestamptz default now()
 );
+alter table public.lif_documents add column if not exists logistics jsonb not null default '[]'::jsonb;
 
 create table if not exists public.lif_counters (
   kind  text primary key,
