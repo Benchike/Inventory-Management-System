@@ -153,6 +153,7 @@
   .module-card .mc-badge{display:inline-block;font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;padding:4px 10px;border-radius:999px;margin-bottom:14px}
   .mc-badge.lif{background:rgba(31,170,107,.14);color:var(--green)}
   .mc-badge.company{background:var(--tag-bg);color:var(--blue-deep)}
+  .mc-badge.pawa{background:rgba(224,138,30,.15);color:var(--amber)}
   .module-card h2{font-size:1.18rem;font-weight:800;letter-spacing:-.02em;margin-bottom:6px;color:var(--text)}
   .module-card .mc-desc{font-size:.8rem;color:var(--muted);line-height:1.5;margin-bottom:18px}
   .module-card .mc-tools{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
@@ -524,6 +525,15 @@ function viewHome(){
             <a class="mc-tool active" href="receipt-generator.html" target="_blank" rel="noopener" onclick="event.stopPropagation()"><span class="ic">🧾</span><span class="tx"><span class="nm">Receipt Generator</span><span class="ds">Issue payment receipts to customers</span></span></a>
             <a class="mc-tool active" href="site-assessment-manager.html" target="_blank" rel="noopener" onclick="event.stopPropagation()"><span class="ic">🏗️</span><span class="tx"><span class="nm">Site Assessment Manager</span><span class="ds">Technical site visits &amp; energy audits</span></span></a>
             <a class="mc-tool active" href="project-site-manager.html" target="_blank" rel="noopener" onclick="event.stopPropagation()"><span class="ic">📍</span><span class="tx"><span class="nm">Project Site Manager</span><span class="ds">Installation lifecycle, complaints &amp; maintenance</span></span></a>
+          </div>
+        </div>
+
+        <div class="module-card" onclick="window.open('pawahauz-survey.html','_blank','noopener')">
+          <span class="mc-badge pawa">Pawahauz</span>
+          <h2>Pawahauz</h2>
+          <div class="mc-desc">Energy-as-a-Service micro-grids for residential buildings: metered apartments billed per kWh.</div>
+          <div class="mc-tools">
+            <a class="mc-tool active" href="pawahauz-survey.html" target="_blank" rel="noopener" onclick="event.stopPropagation()"><span class="ic">⚡</span><span class="tx"><span class="nm">Energy Usage Survey</span><span class="ds">Resident appliances &amp; time of use, building load profile &amp; system sizing</span></span></a>
           </div>
         </div>
 
