@@ -151,12 +151,11 @@ window.KIRU_CONFIG = {
   .pv-bank .ln b{font-weight:700}
   .pv-bank .ln .empty{color:#a0acbb;font-style:italic}
   .pv-notes{margin-top:18px;font-size:11.5px;color:#56657a;white-space:pre-line}
-  .pv-sign{display:flex;justify-content:flex-end;margin-top:34px;break-inside:avoid}
-  .pv-sign .box{min-width:240px;text-align:center}
-  .pv-sign .slot{height:58px;display:flex;align-items:flex-end;justify-content:center}
-  .pv-sign .slot img{max-height:58px;max-width:220px}
-  .pv-sign .line{border-top:1.5px solid #021431;padding-top:5px;font-weight:800;font-size:12.5px}
-  .pv-sign .who{font-size:11px;color:#56657a;font-weight:500;margin-top:1px}
+  .pv-sign{margin-top:30px;break-inside:avoid}
+  .pv-sign .slot{min-height:20px;display:flex;align-items:flex-end}
+  .pv-sign .slot img{max-height:58px;max-width:220px;display:block}
+  .pv-sign .nm{font-weight:800;font-size:12.5px;margin-top:4px}
+  .pv-sign .who{font-size:11.5px;color:#56657a;font-weight:500}
   .pv-foot{text-align:center;font-size:10.5px;color:#8392a5;margin-top:26px;padding-top:12px;border-top:1px solid #eaeef4;line-height:1.6}
 
   @page{size:A4;margin:10mm}
@@ -279,7 +278,7 @@ Ikoyi, Lagos</textarea></div>
       </div>
 
       <div class="sec">
-        <h2>Manager's signature</h2>
+        <h2>Sign-off</h2>
         <div class="row2 mb"><div><span class="lab">Name</span><input type="text" id="signName" value="Benedict Okpala"></div>
           <div><span class="lab">Title</span><input type="text" id="signTitle" value="Managing Director"></div></div>
         <div><span class="lab">Signature <small>(upload — background removed automatically)</small></span>
@@ -313,9 +312,9 @@ Business@ourkiru.com · +234-813-026-6232</div></div>
         <div class="pv-words" id="pv_words"></div>
         <div id="pv_pay"></div>
         <div class="pv-notes" id="pv_notes"></div>
-        <div class="pv-sign"><div class="box">
+        <div class="pv-sign"><div>
           <div class="slot" id="pv_sigSlot"></div>
-          <div class="line">Manager's Signature</div>
+          <div class="nm" id="pv_signName"></div>
           <div class="who" id="pv_signWho"></div>
         </div></div>
         <div class="pv-foot">Kiru Energy Ltd is registered in Nigeria (RC 1619891) · www.ourkiru.com</div>
@@ -493,7 +492,8 @@ function render(){
   }
   $("pv_notes").textContent=val("notes");
   $("pv_sigSlot").innerHTML=customSig?`<img src="${customSig}" alt="signature">`:"";
-  $("pv_signWho").textContent=[val("signName"),val("signTitle")].filter(Boolean).join(" · ");
+  $("pv_signName").textContent=val("signName");
+  $("pv_signWho").textContent=[val("signTitle"),"Kiru Energy Ltd"].filter(Boolean).join(", ");
 }
 
 /* ============ SUPABASE ============ */
