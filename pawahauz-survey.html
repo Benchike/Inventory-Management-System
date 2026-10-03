@@ -213,9 +213,18 @@ window.KIRU_CONFIG = {
 
   <div id="syncBanner"></div>
 
-  <div class="sitebar">
+  <div class="sitebar" id="siteBar">
     <div class="grow"><span class="lab">Pawahauz site <small>(building)</small></span><select id="siteSel"></select></div>
     <button class="btn sec2" id="newSiteBtn">+ New site</button>
+  </div>
+  <div class="card sec mb" id="shareBox" style="display:none">
+    <h2 style="margin-bottom:4px">Field survey link</h2>
+    <div class="hint mb">Send this link to the site engineer. They can fill and submit surveys for this site <b>without logging in</b>, but they can't see other residents or the summary.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="shareLink" readonly style="flex:1;min-width:220px">
+      <button class="btn pri" id="copyLink">Copy link</button>
+      <button class="btn sec2" id="newLink" title="Stop the current link working and create a new one">New link</button>
+    </div>
   </div>
   <div class="card sec mb" id="newSiteForm" style="display:none">
     <h2>New Pawahauz site</h2>
@@ -225,7 +234,7 @@ window.KIRU_CONFIG = {
     <div style="display:flex;gap:8px"><button class="btn pri" id="ns_save">Create site</button><button class="btn sec2" id="ns_cancel">Cancel</button></div>
   </div>
 
-  <div class="viewtabs">
+  <div class="viewtabs" id="viewTabs">
     <button class="vtab on" data-view="residents">Residents</button>
     <button class="vtab" data-view="survey">Survey form</button>
     <button class="vtab" data-view="summary">Site summary &amp; sizing</button>
@@ -252,6 +261,11 @@ window.KIRU_CONFIG = {
   <div class="view" id="surveyView" style="display:none">
     <div class="layout">
       <div class="card controls">
+        <div class="sec" id="mineBox" style="display:none">
+          <h2>Surveys you submitted on this device</h2>
+          <div id="mineList"></div>
+          <button class="addbtn" id="newSurvey3">+ Start a new survey</button>
+        </div>
         <div class="sec">
           <h2><span class="n">1</span>Survey</h2>
           <div class="row2 mb"><div><span class="lab">Reference no.</span><input id="refNo" readonly></div><div><span class="lab">Date</span><input type="date" id="surveyDate"></div></div>
@@ -439,12 +453,13 @@ let SB=null, synced=false, userEmail="";
 let sites=[], siteId=null, surveys=[];
 let cur=null, curId=null, saveT=null, band="";
 let apps=[];
+let field=null, curToken=null; /* field = {code, site} when opened from a public field-survey link */
 function isAdmin(){ return userEmail && userEmail.toLowerCase()===(window.KIRU_CONFIG.ADMIN_EMAIL||"").toLowerCase(); }
 function cfgOK(){ const c=window.KIRU_CONFIG||{}; return c.SUPABASE_URL&&c.SUPABASE_ANON_KEY&&!/YOUR-/.test(c.SUPABASE_URL+c.SUPABASE_ANON_KEY); }
 function banner(msg,ok){ const b=$("syncBanner"); b.textContent=msg; b.style.display=msg?"block":"none";
   b.style.background=ok?"var(--tag-bg)":"rgba(224,138,30,.14)"; b.style.color=ok?"var(--blue-deep)":"#b06a12";
   b.style.border="1px solid "+(ok?"rgba(0,164,255,.35)":"rgba(224,138,30,.4)"); }
-const site=()=>sites.find(s=>s.id===siteId)||null;
+const site=()=>field?field.site:(sites.find(s=>s.id===siteId)||null);
 const DEFAULT_ASSUMP={tariff:300,psh:4.5,pr:0.75,dod:0.8,eff:0.9,autonomy:1,headroom:1.25,growth:20,panelW:550,battModule:5.12,include:"interested"};
 const assump=()=>Object.assign({},DEFAULT_ASSUMP,(site()&&site().assumptions)||{});
 
@@ -476,6 +491,59 @@ $("ns_save").addEventListener("click",async()=>{
   await loadSurveys(); newSurvey(); renderAll(); toast("Site created");
 });
 
+function shareUrl(code){ return location.origin+location.pathname+"?code="+encodeURIComponent(code); }
+function renderShare(){
+  const s=site(), box=$("shareBox");
+  if(field||!synced||!s||!s.access_code){ box.style.display="none"; return; }
+  box.style.display="block"; $("shareLink").value=shareUrl(s.access_code);
+}
+function newCode(){ const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; const b=new Uint8Array(10); crypto.getRandomValues(b); return [...b].map(x=>A[x%A.length]).join(""); }
+$("copyLink").addEventListener("click",async()=>{
+  const v=$("shareLink").value; if(!v)return;
+  try{ await navigator.clipboard.writeText(v); toast("Link copied — send it to the site engineer"); }
+  catch(e){ $("shareLink").select(); toast("Select and copy the link"); }
+});
+$("newLink").addEventListener("click",async()=>{
+  const s=site(); if(!s)return;
+  if(!confirm("Create a new field link for "+s.name+"? The current link will stop working immediately. Surveys already submitted are kept."))return;
+  const code=newCode();
+  const {error}=await SB.from("pawahauz_sites").update({access_code:code}).eq("id",s.id);
+  if(error){ toast("Could not create a new link: "+error.message); return; }
+  s.access_code=code; renderShare(); toast("New link created — send it to the site engineer");
+});
+
+/* ============ FIELD MODE (public link, no login) ============ */
+const mineKey=()=>"pawahauz_mine_"+(field?field.site.id:"");
+function loadMine(){ try{ return JSON.parse(localStorage.getItem(mineKey())||"[]"); }catch(e){ return []; } }
+function rememberMine(){
+  if(!field||!curId)return;
+  const list=loadMine().filter(x=>x.id!==curId);
+  list.unshift({id:curId,token:curToken,ref:val("refNo"),name:val("resName"),unit:val("unitNo"),at:new Date().toISOString()});
+  try{ localStorage.setItem(mineKey(),JSON.stringify(list.slice(0,200))); }catch(e){}
+  renderMine();
+}
+function renderMine(){
+  if(!field)return;
+  const list=loadMine();
+  $("mineList").innerHTML=list.length?list.map(x=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)">
+      <div style="flex:1;min-width:0"><b>${esc(x.unit||"—")}</b> · ${esc(x.name||"—")}<div class="hint">${esc(x.ref)}${x.id===curId?" · open now":""}</div></div>
+      <button class="btn sec2 sm" data-mine="${x.id}">Open</button></div>`).join("")
+    :'<div class="hint">None yet. Surveys you submit from this phone or computer will appear here so you can correct them.</div>';
+  $("mineList").querySelectorAll("[data-mine]").forEach(b=>b.addEventListener("click",()=>openMine(b.dataset.mine)));
+}
+async function openMine(id){
+  const x=loadMine().find(m=>m.id===id); if(!x)return;
+  const {data,error}=await SB.rpc("pawahauz_get_survey",{p_id:x.id,p_token:x.token});
+  if(error||!data){ toast("Could not open this survey"+(error?": "+error.message:"")); return; }
+  rowToForm(Object.assign({},data,{edit_token:x.token})); renderMine(); window.scrollTo(0,0);
+}
+function enterFieldMode(){
+  ["siteBar","newSiteForm","shareBox","viewTabs"].forEach(id=>{ const el=$(id); if(el) el.style.display="none"; });
+  $("mineBox").style.display="block";
+  banner(`Field survey — ${field.site.name}${field.site.address?" ("+field.site.address+")":""}. Fill one form per apartment and press “Submit survey”. It goes straight to the Kiru team.`,true);
+}
+$("newSurvey3").addEventListener("click",()=>{ newSurvey(); renderMine(); window.scrollTo(0,0); });
+
 /* ============ SURVEYS (DB) ============ */
 async function loadSurveys(){
   surveys=[];
@@ -495,7 +563,7 @@ function formToRow(){
     appliances:apps, notes:val("notes"), daily_kwh:+c.daily.toFixed(3), peak_w:Math.round(c.peakW), updated_at:new Date().toISOString()};
 }
 function rowToForm(r){
-  curId=r.id||null;
+  curId=r.id||null; curToken=r.edit_token||null;
   $("refNo").value=r.ref_no||""; $("surveyDate").value=r.survey_date||today(); $("surveyor").value=r.surveyor||"";
   $("resName").value=r.resident_name||""; $("resPhone").value=r.phone||""; $("resEmail").value=r.email||"";
   $("unitNo").value=r.unit_no||""; $("floor").value=r.floor||"Ground Floor"; $("aptType").value=r.apt_type||"Self contain";
@@ -515,13 +583,14 @@ async function nextRef(){
 async function newSurvey(){
   const keepSurveyor=val("surveyor");
   rowToForm({survey_date:today(),surveyor:keepSurveyor});
-  $("refNo").value=""; curId=null;
+  $("refNo").value=""; curId=null; curToken=null;
   apps=[]; renderApps(); renderSurveyReport(); setSaveState();
 }
 async function saveSurvey(silent){
-  if(!synced){ toast("Not signed in — sign in from the main Kiru app, then reload"); return; }
+  if(!synced&&!field){ toast("Not signed in — sign in from the main Kiru app, then reload"); return; }
   if(!siteId){ toast("Create or choose a Pawahauz site first"); return; }
   if(!val("resName").trim()&&!val("unitNo").trim()){ if(!silent)toast("Enter the resident name or apartment no."); return; }
+  if(field) return saveFieldSurvey(silent);
   if(!val("refNo")) $("refNo").value=await nextRef();
   const row=formToRow();
   if(curId){
@@ -538,11 +607,27 @@ async function saveSurvey(silent){
   setSaveState(true); if(!silent) toast("Survey saved — "+val("refNo"));
   renderResidents();
 }
+async function saveFieldSurvey(silent){
+  const data=formToRow(); delete data.site_id; delete data.ref_no; delete data.updated_at;
+  if(curId){
+    const {error}=await SB.rpc("pawahauz_update_survey",{p_id:curId,p_token:curToken,p_data:data});
+    if(error){ toast("Save failed: "+error.message); $("saveState").textContent="Not saved — check your internet connection and try again."; return; }
+  } else {
+    $("saveSurvey").disabled=true;
+    const {data:res,error}=await SB.rpc("pawahauz_submit_survey",{p_code:field.code,p_data:data});
+    $("saveSurvey").disabled=false;
+    if(error||!res){ toast("Submit failed: "+(error?error.message:"no response")); return; }
+    curId=res.id; curToken=res.edit_token; $("refNo").value=res.ref_no;
+  }
+  rememberMine(); setSaveState(true); renderSurveyReport();
+  if(!silent) toast("Survey submitted — "+val("refNo"));
+}
 function queueSave(){ renderSurveyReport(); if(!curId) { setSaveState(); return; } clearTimeout(saveT); $("saveState").textContent="Saving…"; saveT=setTimeout(()=>saveSurvey(true),800); }
 function setSaveState(justSaved){
-  $("saveState").textContent = !synced ? "Not signed in — this survey will not be saved." :
-    curId ? (justSaved?"All changes saved":"Changes save automatically") : "Press “Save survey” once — after that, changes save automatically.";
-  $("saveSurvey").textContent=curId?"Save now":"Save survey";
+  $("saveState").textContent = (!synced&&!field) ? "Not signed in — this survey will not be saved." :
+    curId ? (justSaved?(field?"Submitted — any further changes save automatically":"All changes saved"):"Changes save automatically")
+      : (field?"Press “Submit survey” when the form is filled in. You can still make corrections afterwards.":"Press “Save survey” once — after that, changes save automatically.");
+  $("saveSurvey").textContent=curId?"Save now":(field?"Submit survey":"Save survey");
 }
 async function deleteSurvey(id){
   const s=surveys.find(x=>x.id===id); if(!s) return;
@@ -656,7 +741,7 @@ function renderSurveyReport(){
         <div class="metric"><div class="ml">Peak demand</div><div class="mv">${fmt2(c.peakW/1000)} kW</div><div class="mx">${c.peakHour>=0?"around "+H12(c.peakHour):"—"}</div></div>
         <div class="metric"><div class="ml">Connected load</div><div class="mv">${fmt2(c.connected/1000)} kW</div><div class="mx">all appliances on at once</div></div>
         <div class="metric"><div class="ml">Night-time share</div><div class="mv">${c.daily?Math.round(c.nightKwh/c.daily*100):0}%</div><div class="mx">outside ${H12(SUN_FROM)}–${H12(SUN_TO)} (needs battery)</div></div>
-        <div class="metric"><div class="ml">Est. Pawahauz bill</div><div class="mv">${ngn(monthly*a.tariff)}</div><div class="mx">per month at ₦${fmt0.format(a.tariff)}/kWh</div></div>
+        ${field?"":`<div class="metric"><div class="ml">Est. Pawahauz bill</div><div class="mv">${ngn(monthly*a.tariff)}</div><div class="mx">per month at ₦${fmt0.format(a.tariff)}/kWh</div></div>`}
       </div>
       <div class="chart"><div class="cap"><span><i style="background:#00a4ff"></i>Average hourly load</span><span><i style="background:#fff4e3;border:1px solid #f3d7a8"></i>Solar hours</span><span>- - - Peak if everything runs at once</span></div>
         ${chartSVG([{data:c.prof,color:"#00a4ff"}],{line:c.plate})}</div>
@@ -825,7 +910,7 @@ function printView(which){
   document.body.classList.add(which==="summary"?"print-site":"print-survey");
   requestAnimationFrame(()=>{ window.print(); document.body.classList.remove("print-site","print-survey"); });
 }
-function renderAll(){ renderResidents(); renderSurveyReport(); if(view==="summary"){ renderAssump(); renderSiteReport(); } }
+function renderAll(){ renderShare(); renderResidents(); renderSurveyReport(); if(view==="summary"){ renderAssump(); renderSiteReport(); } }
 
 async function init(){
   if(!cfgOK()||!window.supabase){ banner("App is not configured.",false); }
@@ -833,9 +918,17 @@ async function init(){
     SB=window.supabase.createClient(window.KIRU_CONFIG.SUPABASE_URL,window.KIRU_CONFIG.SUPABASE_ANON_KEY);
     const {data:{session}}=await SB.auth.getSession();
     if(session){ synced=true; userEmail=(session.user&&session.user.email)||""; }
-    else banner("Not signed in — sign in from the main Kiru app in another tab, then reload this page to save surveys.",false);
+    else {
+      const code=(new URLSearchParams(location.search).get("code")||"").trim();
+      if(code){
+        const {data,error}=await SB.rpc("pawahauz_site_by_code",{p_code:code});
+        const s=Array.isArray(data)?data[0]:data;
+        if(!error&&s){ field={code,site:s}; siteId=s.id; enterFieldMode(); await newSurvey(); renderMine(); setView("survey"); return; }
+        banner("This survey link is not valid any more. Ask the Kiru team to send you the current link.",false);
+      } else banner("Not signed in. Kiru staff: sign in from the main Kiru app, then reload this page. Site engineers: open the field survey link the Kiru team sent you.",false);
+    }
   }
-  await loadSites(); await loadSurveys();
+  await loadSites(); await loadSurveys(); renderShare();
   await newSurvey(); setView("residents");
 }
 init();
