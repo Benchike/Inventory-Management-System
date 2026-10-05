@@ -82,6 +82,11 @@ window.KIRU_CONFIG = {
   .band .bh{font-size:.58rem;color:var(--muted);font-weight:600}
   .band.on{background:var(--blue);border-color:var(--blue);color:#04121f}
   .band.on .bh{color:#04263b}
+  .yesno{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .yesno .band{padding:9px 4px;font-weight:800;font-size:.86rem}
+  .band.no.on{background:var(--amber);border-color:var(--amber);color:#2a1a00}
+  input[readonly]{background:transparent;border-style:dashed;color:var(--blue-deep);cursor:default}
+  input[readonly]:focus{box-shadow:none;border-color:var(--line)}
 
   .btn{font-family:inherit;font-size:.84rem;font-weight:700;cursor:pointer;border-radius:10px;padding:10px 14px;border:1px solid transparent;white-space:nowrap}
   .btn.pri{background:var(--blue);color:#04121f}.btn.pri:hover{background:var(--blue-deep)}
@@ -268,7 +273,7 @@ window.KIRU_CONFIG = {
         </div>
         <div class="sec">
           <h2><span class="n">1</span>Survey</h2>
-          <div class="row2 mb"><div><span class="lab">Reference no.</span><input id="refNo" readonly></div><div><span class="lab">Date</span><input type="date" id="surveyDate"></div></div>
+          <div class="row2 mb"><div><span class="lab">Reference no. <small>(automatic)</small></span><input id="refNo" readonly tabindex="-1" title="Generated automatically — it can't be typed in"></div><div><span class="lab">Date</span><input type="date" id="surveyDate"></div></div>
           <div><span class="lab">Surveyed by</span><input id="surveyor"></div>
         </div>
         <div class="sec">
@@ -287,6 +292,12 @@ window.KIRU_CONFIG = {
         </div>
         <div class="sec">
           <h2><span class="n">3</span>Current energy situation</h2>
+          <span class="lab">Is grid (public) power available at the apartment?</span>
+          <div class="yesno mb" id="gridAvRow">
+            <div class="band" data-av="Yes">Yes</div>
+            <div class="band no" data-av="No">No</div>
+          </div>
+          <div id="gridBlock" style="display:none">
           <span class="lab">Grid band</span>
           <div class="bandrow mb" id="bandRow">
             <div class="band" data-band="A"><div class="bl">A</div><div class="bh">20+ hrs</div></div>
@@ -298,6 +309,7 @@ window.KIRU_CONFIG = {
           <div class="row2 mb">
             <div><span class="lab">Avg. grid hours / day</span><input id="gridHours" type="number" min="0" max="24"></div>
             <div><span class="lab">Grid spend / month (₦)</span><input id="gridSpend" inputmode="numeric" data-money></div>
+          </div>
           </div>
           <div class="row2 mb">
             <div><span class="lab">Backup power</span><select id="backupType"><option>None</option><option>Generator (petrol)</option><option>Generator (diesel)</option><option>Inverter + batteries</option><option>Solar system</option><option>Other</option></select></div>
@@ -453,7 +465,7 @@ let SB=null, synced=false, userEmail="";
 let sites=[], siteId=null, surveys=[];
 let cur=null, curId=null, saveT=null, band="";
 let apps=[];
-let field=null, curToken=null; /* field = {code, site} when opened from a public field-survey link */
+let field=null, curToken=null, gridAv=""; /* field = {code, site} when opened from a public field-survey link */
 function isAdmin(){ return userEmail && userEmail.toLowerCase()===(window.KIRU_CONFIG.ADMIN_EMAIL||"").toLowerCase(); }
 function cfgOK(){ const c=window.KIRU_CONFIG||{}; return c.SUPABASE_URL&&c.SUPABASE_ANON_KEY&&!/YOUR-/.test(c.SUPABASE_URL+c.SUPABASE_ANON_KEY); }
 function banner(msg,ok){ const b=$("syncBanner"); b.textContent=msg; b.style.display=msg?"block":"none";
@@ -557,10 +569,11 @@ function formToRow(){
   return {site_id:siteId, ref_no:val("refNo"), survey_date:val("surveyDate")||null, surveyor:val("surveyor"),
     resident_name:val("resName"), phone:val("resPhone"), email:val("resEmail"), unit_no:val("unitNo"), floor:val("floor"), apt_type:val("aptType"),
     occupants:parseInt(val("occupants"))||0, occupancy:val("occupancy"),
-    grid_band:band, grid_hours:parseFloat(val("gridHours"))||0, grid_spend:money(val("gridSpend")),
+    grid_band:gridAv==="Yes"?band:"", grid_hours:gridAv==="Yes"?(parseFloat(val("gridHours"))||0):0, grid_spend:gridAv==="Yes"?money(val("gridSpend")):0,
     backup_type:val("backupType"), backup_size:val("backupSize"), fuel_spend:money(val("fuelSpend")), gen_hours:parseFloat(val("genHours"))||0,
     interest:val("interest"), pay_pref:val("payPref"), max_spend:money(val("maxSpend")), supply_hours:val("supplyHours"),
-    appliances:apps, notes:val("notes"), daily_kwh:+c.daily.toFixed(3), peak_w:Math.round(c.peakW), updated_at:new Date().toISOString()};
+    appliances:apps, notes:val("notes"), daily_kwh:+c.daily.toFixed(3), peak_w:Math.round(c.peakW), updated_at:new Date().toISOString(),
+    ...(gridAv?{grid_available:gridAv}:{})};
 }
 function rowToForm(r){
   curId=r.id||null; curToken=r.edit_token||null;
@@ -568,6 +581,7 @@ function rowToForm(r){
   $("resName").value=r.resident_name||""; $("resPhone").value=r.phone||""; $("resEmail").value=r.email||"";
   $("unitNo").value=r.unit_no||""; $("floor").value=r.floor||"Ground Floor"; $("aptType").value=r.apt_type||"Self contain";
   $("occupants").value=r.occupants||""; $("occupancy").value=r.occupancy||"Someone home most of the day";
+  setGridAv(r.grid_available||((r.grid_band||r.grid_hours||r.grid_spend)?"Yes":""));
   band=r.grid_band||""; $("bandRow").querySelectorAll(".band").forEach(b=>b.classList.toggle("on",b.dataset.band===band));
   $("gridHours").value=r.grid_hours||""; $("gridSpend").value=r.grid_spend?fmt0.format(r.grid_spend):"";
   $("backupType").value=r.backup_type||"None"; $("backupSize").value=r.backup_size||""; $("fuelSpend").value=r.fuel_spend?fmt0.format(r.fuel_spend):""; $("genHours").value=r.gen_hours||"";
@@ -583,7 +597,10 @@ async function nextRef(){
 async function newSurvey(){
   const keepSurveyor=val("surveyor");
   rowToForm({survey_date:today(),surveyor:keepSurveyor});
-  $("refNo").value=""; curId=null; curToken=null;
+  curId=null; curToken=null;
+  /* staff get the next number straight away; field-link users get it from the server when they submit */
+  $("refNo").value=synced?await nextRef():"";
+  $("refNo").placeholder=field?"Assigned when you submit":"Assigned when saved";
   apps=[]; renderApps(); renderSurveyReport(); setSaveState();
 }
 async function saveSurvey(silent){
@@ -595,11 +612,11 @@ async function saveSurvey(silent){
   const row=formToRow();
   if(curId){
     const {error}=await SB.from("pawahauz_surveys").update(row).eq("id",curId);
-    if(error){ toast("Save failed: "+error.message); return; }
+    if(error){ toast(/grid_available/.test(error.message)?"Run add_pawahauz_grid_available.sql in Supabase first":"Save failed: "+error.message); return; }
   } else {
     row.created_by=userEmail;
     const {data,error}=await SB.from("pawahauz_surveys").insert(row).select().single();
-    if(error){ toast("Save failed: "+error.message); return; }
+    if(error){ toast(/grid_available/.test(error.message)?"Run add_pawahauz_grid_available.sql in Supabase first":"Save failed: "+error.message); return; }
     curId=data.id;
   }
   const i=surveys.findIndex(s=>s.id===curId); const merged=Object.assign({},surveys[i]||{},row,{id:curId});
@@ -638,6 +655,12 @@ async function deleteSurvey(id){
 }
 
 /* ============ FORM WIRING ============ */
+function setGridAv(v){
+  gridAv=v||"";
+  $("gridAvRow").querySelectorAll(".band").forEach(b=>b.classList.toggle("on",b.dataset.av===gridAv));
+  $("gridBlock").style.display=gridAv==="Yes"?"block":"none";
+}
+$("gridAvRow").querySelectorAll(".band").forEach(b=>b.addEventListener("click",()=>{ setGridAv(gridAv===b.dataset.av?"":b.dataset.av); queueSave(); }));
 $("bandRow").querySelectorAll(".band").forEach(b=>b.addEventListener("click",()=>{
   band=band===b.dataset.band?"":b.dataset.band;
   $("bandRow").querySelectorAll(".band").forEach(x=>x.classList.toggle("on",x.dataset.band===band)); queueSave();
@@ -732,8 +755,8 @@ function renderSurveyReport(){
       <div>${kv("Apartment",esc(val("unitNo")))}${kv("Floor",esc(val("floor")))}${kv("Type",esc(val("aptType")))}${kv("Occupants",esc(val("occupants")))}${kv("Daytime",esc(val("occupancy")))}</div>
     </div></div>
     <div class="rp-sec"><div class="rp-h">2 · Current energy &amp; interest</div><div class="rp-grid">
-      <div>${kv("Grid band",band?"Band "+band:"")}${kv("Grid hours / day",val("gridHours")?esc(val("gridHours"))+" hrs":"")}${kv("Grid spend / month",val("gridSpend")?"₦"+esc(val("gridSpend")):"")}${kv("Backup",esc(val("backupType"))+(val("backupSize")?" · "+esc(val("backupSize")):""))}${kv("Fuel spend / month",val("fuelSpend")?"₦"+esc(val("fuelSpend")):"")}</div>
-      <div>${kv("Interest",esc(val("interest")))}${kv("Preferred payment",esc(val("payPref")))}${kv("Willing to spend / month",val("maxSpend")?"₦"+esc(val("maxSpend")):"")}${kv("Key supply hours",esc(val("supplyHours")))}${kv("Current spend / month",ngn(money(val("gridSpend"))+money(val("fuelSpend"))))}</div>
+      <div>${kv("Grid power available",gridAv)}${gridAv==="Yes"?kv("Grid band",band?"Band "+band:"")+kv("Grid hours / day",val("gridHours")?esc(val("gridHours"))+" hrs":"")+kv("Grid spend / month",val("gridSpend")?"₦"+esc(val("gridSpend")):""):""}${kv("Backup",esc(val("backupType"))+(val("backupSize")?" · "+esc(val("backupSize")):""))}${kv("Fuel spend / month",val("fuelSpend")?"₦"+esc(val("fuelSpend")):"")}</div>
+      <div>${kv("Interest",esc(val("interest")))}${kv("Preferred payment",esc(val("payPref")))}${kv("Willing to spend / month",val("maxSpend")?"₦"+esc(val("maxSpend")):"")}${kv("Key supply hours",esc(val("supplyHours")))}${kv("Current spend / month",ngn((gridAv==="Yes"?money(val("gridSpend")):0)+money(val("fuelSpend"))))}</div>
     </div></div>
     <div class="rp-sec"><div class="rp-h">3 · Load profile</div>
       <div class="metrics">
@@ -782,11 +805,11 @@ function renderResidents(){
 $("resSearch").addEventListener("input",renderResidents);
 $("csvBtn").addEventListener("click",()=>{
   if(!surveys.length){ toast("No surveys to export"); return; }
-  const head=["Ref","Date","Surveyor","Apartment","Floor","Type","Resident","Phone","Email","Occupants","Daytime","Grid band","Grid hrs","Grid spend","Backup","Backup size","Fuel spend","Interest","Payment","Willing spend","Appliance","Qty","Watts","Runs %","Time of use","Hours/day","kWh/day","Resident kWh/day","Resident peak W"];
+  const head=["Ref","Date","Surveyor","Apartment","Floor","Type","Resident","Phone","Email","Occupants","Daytime","Grid available","Grid band","Grid hrs","Grid spend","Backup","Backup size","Fuel spend","Interest","Payment","Willing spend","Appliance","Qty","Watts","Runs %","Time of use","Hours/day","kWh/day","Resident kWh/day","Resident peak W"];
   const q=v=>{ const s=v==null?"":String(v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
   const lines=[head.join(",")];
   surveys.forEach(r=>{
-    const base=[r.ref_no,r.survey_date,r.surveyor,r.unit_no,r.floor,r.apt_type,r.resident_name,r.phone,r.email,r.occupants,r.occupancy,r.grid_band,r.grid_hours,r.grid_spend,r.backup_type,r.backup_size,r.fuel_spend,r.interest,r.pay_pref,r.max_spend];
+    const base=[r.ref_no,r.survey_date,r.surveyor,r.unit_no,r.floor,r.apt_type,r.resident_name,r.phone,r.email,r.occupants,r.occupancy,r.grid_available||"",r.grid_band,r.grid_hours,r.grid_spend,r.backup_type,r.backup_size,r.fuel_spend,r.interest,r.pay_pref,r.max_spend];
     const c=calc(r.appliances);
     const appsRows=c.rows.length?c.rows:[null];
     appsRows.forEach(x=>lines.push([...base, x?x.a.name:"", x?x.a.qty:"", x?x.a.w:"", x?(x.a.duty??100):"", x?fmtRanges(x.a.hours):"", x?x.hrs:"", x?x.kwh.toFixed(3):"", c.daily.toFixed(3), Math.round(c.peakW)].map(q).join(",")));
@@ -856,6 +879,8 @@ function renderSiteReport(){
         <div class="metric"><div class="ml">Apartments surveyed</div><div class="mv">${surveys.length}${s.total_units?" / "+s.total_units:""}</div><div class="mx">${s.total_units?Math.round(surveys.length/s.total_units*100)+"% of building":"total apartments not set"}</div></div>
         ${interestCounts.map(([k,n])=>`<div class="metric"><div class="ml">${k}</div><div class="mv">${n}</div><div class="mx">${surveys.length?Math.round(n/surveys.length*100):0}% of surveyed</div></div>`).join("")}
       </div>
+      ${(()=>{ const no=surveys.filter(r=>r.grid_available==="No").length, yes=surveys.filter(r=>r.grid_available==="Yes").length;
+        return (no||yes)?`<div class="fine" style="font-style:normal"><b>Grid power:</b> ${yes} with grid · ${no} without grid${surveys.length-no-yes?` · ${surveys.length-no-yes} not asked`:""}</div>`:""; })()}
       <div class="fine">Sizing below uses ${a.include==="all"?"<b>everyone surveyed</b>":"<b>interested residents only</b> (Very interested + Interested)"} — ${inc.length} apartment${inc.length===1?"":"s"}.</div>
     </div>
     <div class="rp-sec"><div class="rp-h">2 · Combined demand</div>
