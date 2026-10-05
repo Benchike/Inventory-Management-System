@@ -96,6 +96,7 @@
   .badge{display:inline-block;font-size:8px;font-weight:800;letter-spacing:.03em;padding:2px 5px;border-radius:4px;color:#fff}
   .badge.sgs{background:#0086d4}.badge.gbs{background:#1faa6b}
   .badge.res{background:#6a7685}.badge.sme{background:#e08a1e}
+  .badge.gm{background:#0086d4}.badge.gf{background:#c2185b}.badge.gn{background:#b8c2d0}
   .ck{font-size:9px;font-weight:700}
   .ck .y{color:#1faa6b}.ck .n{color:#c9d2dc}
   .legend{display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:9px;font-size:9.5px;color:#56657a}
@@ -236,7 +237,7 @@ const CHECKS=["Insulation resistance test","Inverter output within range","Full 
 const CHECK_SHORT=["IR test","Output","Load test","IoT","Handover"];
 
 function newSite(i){return{
-  _id:null, ref:"KIRU-P1-"+String(i).padStart(3,"0"), business:"", category:"SME", cluster:"",
+  _id:null, ref:"KIRU-P1-"+String(i).padStart(3,"0"), business:"", gender:"", category:"SME", cluster:"",
   cls:"SGS",
   pvQty:0, pvW:0, invKW:0, batKWh:0,
   commDate:"", status:"Commissioned",
@@ -268,18 +269,21 @@ function setSyncBanner(msg,ok){
   b.style.borderColor=ok?"rgba(0,164,255,.35)":"rgba(224,138,30,.4)";
 }
 function rowToSite(r){
-  return {_id:r.id, ref:r.ref||"", business:r.business||"", category:r.category||"SME", cluster:r.cluster||"",
+  return {_id:r.id, ref:r.ref||"", business:r.business||"", gender:r.gender||"", _hadGender:!!r.gender, category:r.category||"SME", cluster:r.cluster||"",
     cls:r.cls||"SGS", pvQty:r.pv_qty||0, pvW:r.pv_w||0, invKW:r.inv_kw||0, batKWh:r.bat_kwh||0,
     commDate:r.comm_date||"", status:r.status||"Commissioned", beneficiaries:r.beneficiaries||0,
     mediaLink:r.media_link||"", iotLink:r.iot_link||"",
     checks: Array.isArray(r.checks) && r.checks.length===CHECKS.length ? r.checks : CHECKS.map(()=>true)};
 }
 function siteToRow(s,order){
-  return {ref:s.ref, business:s.business, category:s.category, cluster:s.cluster, cls:s.cls,
+  const row={ref:s.ref, business:s.business, category:s.category, cluster:s.cluster, cls:s.cls,
     pv_qty:s.pvQty, pv_w:s.pvW, inv_kw:s.invKW, bat_kwh:s.batKWh,
     comm_date:s.commDate||null, status:s.status, beneficiaries:s.beneficiaries,
     media_link:s.mediaLink, iot_link:s.iotLink, checks:s.checks,
     period: val("period"), sort_order: order};
+  /* only send gender once one is recorded, so saves keep working before the gender column exists */
+  if(s.gender||s._hadGender) row.gender=s.gender||"";
+  return row;
 }
 async function saveSite(i){
   if(!SB||!synced) return;
@@ -287,10 +291,11 @@ async function saveSite(i){
   const row=siteToRow(s,i);
   if(s._id){
     const {error}=await SB.from("lif_phase1_installations").update(row).eq("id",s._id);
-    if(error) console.error("save error",error);
+    if(error){ console.error("save error",error); if(/gender/i.test(error.message||"")) setSyncBanner("Gender could not be saved — run add_phase1_customer_gender.sql in Supabase first.",false); }
+    else if(s.gender) s._hadGender=true;
   } else {
     const {data,error}=await SB.from("lif_phase1_installations").insert(row).select("id").single();
-    if(error){ console.error("insert error",error); return; }
+    if(error){ console.error("insert error",error); if(/gender/i.test(error.message||"")) setSyncBanner("Gender could not be saved — run add_phase1_customer_gender.sql in Supabase first.",false); return; }
     if(sites[i]) sites[i]._id=data.id;
   }
 }
@@ -446,7 +451,7 @@ function renderTabs(){
 }
 function f(k,label,type,extra){
   const s=sites[cur]; const v=s[k];
-  if(type==="select"){ return `<div><span class="lab">${label}</span><select data-k="${k}">${extra.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join("")}</select></div>`; }
+  if(type==="select"){ return `<div><span class="lab">${label}</span><select data-k="${k}">${extra.map(o=>`<option value="${esc(o)}" ${o===(v||"")?'selected':''}>${o||"— select —"}</option>`).join("")}</select></div>`; }
   if(type==="area"){ return `<div><span class="lab">${label}</span><textarea data-k="${k}">${esc(v)}</textarea></div>`; }
   return `<div><span class="lab">${label}</span><input type="${type||'text'}" data-k="${k}" value="${(v===0||v)?esc(String(v)):''}" ${extra||''}></div>`;
 }
@@ -455,7 +460,7 @@ function renderForm(){
   const s=sites[cur];
   $("siteForm").innerHTML=`
     <div class="row2 mb">${f("ref","Site ref")}${f("cls","Class of system","select",["SGS","GBS"])}</div>
-    <div class="mb">${f("business","Name of customer")}</div>
+    <div class="row2 mb">${f("business","Name of customer")}${f("gender","Gender of customer","select",["","Male","Female"])}</div>
     <div class="row2 mb">${f("category","Category","select",["Residential","SME"])}${f("cluster","Location")}</div>
     <div class="row3 mb">${f("pvQty","PV panels (qty)","number")}${f("pvW","Panel watts","number")}${f("invKW","Inverter (kW)","number",'step="0.01"')}</div>
     <div class="row3 mb">${f("batKWh","Battery (kWh)","number",'step="0.01"')}${f("commDate","Commissioned","date")}${f("beneficiaries","Beneficiaries","number")}</div>
@@ -484,12 +489,13 @@ $("moveLeft").addEventListener("click",()=>moveSite(cur,cur-1));
 $("moveRight").addEventListener("click",()=>moveSite(cur,cur+1));
 
 function render(){
-  let tkwp=0,tinv=0,tbat=0,tben=0,nSGS=0,nGBS=0,nRes=0,nSme=0,comm=0;
+  let tkwp=0,tinv=0,tbat=0,tben=0,nSGS=0,nGBS=0,nRes=0,nSme=0,comm=0,nMale=0,nFemale=0;
   const rows=sites.map((s,i)=>{
     const kwp=(s.pvQty||0)*(s.pvW||0)/1000;
     tkwp+=kwp; tinv+=(s.invKW||0); tbat+=(s.batKWh||0); tben+=(s.beneficiaries||0);
     if(s.cls==="SGS")nSGS++; else nGBS++;
     if(s.category==="Residential")nRes++; else nSme++;
+    if(s.gender==="Male")nMale++; else if(s.gender==="Female")nFemale++;
     if((s.status||"").indexOf("Commissioned")===0) comm++;
     return {s,i,kwp};
   });
@@ -499,6 +505,7 @@ function render(){
     return `<tr>
       <td>${r.i+1}</td>
       <td class="l">${esc(s.business)||'—'}</td>
+      <td>${s.gender?`<span class="badge ${s.gender==='Female'?'gf':'gm'}">${s.gender==='Female'?'F':'M'}</span>`:'<span style="color:#c0cad6">—</span>'}</td>
       <td><span class="badge ${s.category==='Residential'?'res':'sme'}">${s.category==='Residential'?'RES':'SME'}</span></td>
       <td class="l">${esc(s.cluster)||'—'}</td>
       <td><span class="badge ${s.cls==='SGS'?'sgs':'gbs'}">${s.cls}</span></td>
@@ -511,7 +518,7 @@ function render(){
       <td>${linkCell(s.iotLink,"Monitor")}</td>
     </tr>`;
   }).join("");
-  const totRow=`<tr class="tot"><td></td><td class="l">TOTAL — ${sites.length} site${sites.length===1?'':'s'}</td><td></td><td></td><td></td><td>${nf(tkwp)}</td><td>${nf(tinv)}</td><td>${nf(tbat)}</td><td>${n0.format(tben)}</td><td></td><td></td><td>${comm} comm.</td><td></td><td></td></tr>`;
+  const totRow=`<tr class="tot"><td></td><td class="l">TOTAL — ${sites.length} site${sites.length===1?'':'s'}</td><td>${nMale}M · ${nFemale}F</td><td></td><td></td><td></td><td>${nf(tkwp)}</td><td>${nf(tinv)}</td><td>${nf(tbat)}</td><td>${n0.format(tben)}</td><td></td><td></td><td>${comm} comm.</td><td></td><td></td></tr>`;
 
   $("report").innerHTML=`
     <div class="rp-cover avoid-break">
@@ -532,21 +539,21 @@ function render(){
         <div class="kc"><div class="l">Battery storage</div><div class="v">${nf(tbat)} kWh</div><div class="x">lithium</div></div>
         <div class="kc"><div class="l">Beneficiaries</div><div class="v">${n0.format(tben)}</div><div class="x">supported</div></div>
       </div>
-      <div class="legend"><span><b>System class:</b> SGS ${nSGS} · GBS ${nGBS}</span><span><b>Category:</b> Residential ${nRes} · SME ${nSme}</span></div>
+      <div class="legend"><span><b>System class:</b> SGS ${nSGS} · GBS ${nGBS}</span><span><b>Category:</b> Residential ${nRes} · SME ${nSme}</span><span><b>Customer gender:</b> Male ${nMale} · Female ${nFemale}${sites.length-nMale-nFemale?` · Not recorded ${sites.length-nMale-nFemale}`:""}${nMale+nFemale?` (${Math.round(nFemale/(nMale+nFemale)*100)}% female)`:""}</span></div>
     </div>
 
     <div class="rblk" style="padding-top:18px"><div class="sh">Installation Register</div>
       <table class="reg">
-        <colgroup><col style="width:26px"><col style="width:150px"><col style="width:40px"><col style="width:130px"><col style="width:40px"><col style="width:46px"><col style="width:44px"><col style="width:48px"><col style="width:38px"><col style="width:70px"><col style="width:66px"><col style="width:76px"><col style="width:56px"><col style="width:56px"></colgroup>
+        <colgroup><col style="width:26px"><col style="width:140px"><col style="width:46px"><col style="width:40px"><col style="width:118px"><col style="width:40px"><col style="width:46px"><col style="width:44px"><col style="width:48px"><col style="width:38px"><col style="width:70px"><col style="width:66px"><col style="width:76px"><col style="width:56px"><col style="width:56px"></colgroup>
         <thead><tr>
-          <th>S/N</th><th class="l">Name of Customer</th><th>Cat.</th><th class="l">Location</th><th>Class</th>
+          <th>S/N</th><th class="l">Name of Customer</th><th>Gender</th><th>Cat.</th><th class="l">Location</th><th>Class</th>
           <th>PV kWp</th><th>Inv kW</th><th>Batt kWh</th><th>Benef.</th>
           <th>Commissioned</th><th>Commissioning Log</th><th>Status</th>
           <th>Photos / Videos</th><th>IoT Link</th>
         </tr></thead>
-        <tbody>${body||'<tr><td colspan="14" style="padding:12px;color:#b8c2d0;font-style:italic">No installations added</td></tr>'}${totRow}</tbody>
+        <tbody>${body||'<tr><td colspan="15" style="padding:12px;color:#b8c2d0;font-style:italic">No installations added</td></tr>'}${totRow}</tbody>
       </table>
-      <div class="legend"><span><b>Commissioning log key (in order):</b> ${CHECK_SHORT.map((c,i)=>c).join(" · ")}</span><span>✓ = completed · ✕ = outstanding</span></div>
+      <div class="legend"><span><b>Commissioning log key (in order):</b> ${CHECK_SHORT.map((c,i)=>c).join(" · ")}</span><span>✓ = completed · ✕ = outstanding</span><span><b>Gender:</b> M = Male · F = Female</span></div>
     </div>
 
     <div class="rblk avoid-break" style="padding-top:18px"><div class="sh">Declaration &amp; Sign-off</div>

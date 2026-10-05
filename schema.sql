@@ -540,6 +540,7 @@ create table if not exists public.lif_phase1_installations (
   id            uuid primary key default gen_random_uuid(),
   ref           text not null default '',
   business      text not null default '',
+  gender        text not null default '',
   category      text not null default 'SME' check (category in ('Residential','SME')),
   cluster       text default '',
   cls           text not null default 'SGS' check (cls in ('SGS','GBS')),
@@ -1413,3 +1414,5 @@ drop policy if exists allon_invoices_rw          on public.allon_invoices;
 drop policy if exists allon_invoice_counters_r   on public.allon_invoice_counters;
 create policy allon_invoices_rw          on public.allon_invoices          for all    to authenticated using (true) with check (true);
 create policy allon_invoice_counters_r   on public.allon_invoice_counters  for select to authenticated using (true);
+
+alter table public.lif_phase1_installations add column if not exists gender text not null default '';
