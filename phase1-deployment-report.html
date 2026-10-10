@@ -486,8 +486,7 @@ function renderForm(){
     <div class="row3 mb">${f("batKWh","Battery (kWh)","number",'step="0.01"')}${f("commDate","Commissioned","date")}${f("beneficiaries","Beneficiaries","number")}</div>
     <div class="mb">${f("status","Status","select",["Commissioned","Installed - pending commissioning","In progress"])}</div>
     <div class="mb"><span class="lab">Commissioning log</span><div class="chk" id="chkBox"></div></div>
-    <div class="mb">${f("mediaLink","Link to photos &amp; videos")}</div>
-    <div>${f("iotLink","IoT monitoring link")}</div>`;
+    <div>${f("mediaLink","Link to photos &amp; videos")}</div>`;
   const cb=$("chkBox"); cb.innerHTML="";
   CHECKS.forEach((c,i)=>{
     const d=document.createElement("div"); d.className="chkitem"+(s.checks[i]?" on":"");
@@ -586,10 +585,9 @@ function render(){
       <td class="ck">${ck}</td>
       <td>${esc(s.status)}</td>
       <td>${linkCell(s.mediaLink,"Open")}</td>
-      <td>${linkCell(s.iotLink,"Monitor")}</td>
     </tr>`;
   }).join("");
-  const totRow=`<tr class="tot"><td></td><td class="l">TOTAL — ${shown.length} site${shown.length===1?'':'s'}</td><td>${nMale}M · ${nFemale}F</td><td></td><td></td><td></td><td>${nf(tkwp)}</td><td>${nf(tinv)}</td><td>${nf(tbat)}</td><td>${n0.format(tben)}</td><td></td><td></td><td>${comm} comm.</td><td></td><td></td></tr>`;
+  const totRow=`<tr class="tot"><td></td><td class="l">TOTAL — ${shown.length} site${shown.length===1?'':'s'}</td><td>${nMale}M · ${nFemale}F</td><td></td><td></td><td></td><td>${nf(tkwp)}</td><td>${nf(tinv)}</td><td>${nf(tbat)}</td><td>${n0.format(tben)}</td><td></td><td></td><td>${comm} comm.</td><td></td></tr>`;
 
   $("report").innerHTML=`
     <div class="rp-cover avoid-break">
@@ -615,14 +613,14 @@ function render(){
 
     <div class="rblk" style="padding-top:18px"><div class="sh">Installation Register</div>
       <table class="reg">
-        <colgroup><col style="width:26px"><col style="width:140px"><col style="width:46px"><col style="width:40px"><col style="width:118px"><col style="width:40px"><col style="width:46px"><col style="width:44px"><col style="width:48px"><col style="width:38px"><col style="width:70px"><col style="width:66px"><col style="width:76px"><col style="width:56px"><col style="width:56px"></colgroup>
+        <colgroup><col style="width:26px"><col style="width:140px"><col style="width:46px"><col style="width:40px"><col style="width:118px"><col style="width:40px"><col style="width:46px"><col style="width:44px"><col style="width:48px"><col style="width:38px"><col style="width:70px"><col style="width:66px"><col style="width:76px"><col style="width:56px"></colgroup>
         <thead><tr>
           <th>S/N</th><th class="l">Name of Customer</th><th>Gender</th><th>Cat.</th><th class="l">Location</th><th>Class</th>
           <th>PV kWp</th><th>Inv kW</th><th>Batt kWh</th><th>Benef.</th>
           <th>Commissioned</th><th>Commissioning Log</th><th>Status</th>
-          <th>Photos / Videos</th><th>IoT Link</th>
+          <th>Photos / Videos</th>
         </tr></thead>
-        <tbody>${body||'<tr><td colspan="15" style="padding:12px;color:#b8c2d0;font-style:italic">${sites.length?"No installations commissioned in the selected date range":"No installations added"}</td></tr>'}${totRow}</tbody>
+        <tbody>${body||'<tr><td colspan="14" style="padding:12px;color:#b8c2d0;font-style:italic">${sites.length?"No installations commissioned in the selected date range":"No installations added"}</td></tr>'}${totRow}</tbody>
       </table>
       <div class="legend"><span><b>Commissioning log key (in order):</b> ${CHECK_SHORT.map((c,i)=>c).join(" · ")}</span><span>✓ = completed · ✕ = outstanding</span><span><b>Gender:</b> M = Male · F = Female</span></div>
     </div>
