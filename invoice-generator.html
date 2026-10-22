@@ -79,11 +79,14 @@ window.KIRU_CONFIG = {
   .row2cap{display:grid;grid-template-columns:1fr 80px;gap:8px}
   .row3cap{display:grid;grid-template-columns:1fr 52px 108px;gap:6px}
   .row3cap input:last-child{text-align:right}
-  .addrow{display:grid;grid-template-columns:1fr 48px 96px auto;gap:6px;align-items:center;margin-bottom:8px}
+  .addrow{display:grid;grid-template-columns:1fr 48px 96px auto auto;gap:6px;align-items:center;margin-bottom:8px}
   .addrow input:nth-child(3){text-align:right}
   .delbtn{width:32px;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--soft);color:var(--muted);
     cursor:pointer;display:grid;place-items:center;transition:.16s}
   .delbtn:hover{border-color:#ff6b6b;color:#ff6b6b}.delbtn svg{width:15px;height:15px}
+  .insbtn{width:32px;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--soft);color:var(--muted);
+    cursor:pointer;display:grid;place-items:center;transition:.16s}
+  .insbtn:hover{border-color:var(--blue);color:var(--blue-deep)}.insbtn svg{width:15px;height:15px}
   .addbtn{font-family:inherit;font-size:.8rem;font-weight:700;color:var(--blue-deep);cursor:pointer;background:none;
     border:1px dashed var(--line);border-radius:9px;padding:9px;width:100%;transition:.16s}
   .addbtn:hover{border-color:var(--blue);background:var(--tag-bg)}
@@ -490,7 +493,7 @@ function applyLock(){
   $("lifecycleBar").style.display = locked ? "none" : "flex";
   $("lockMsg").style.display = locked ? "block" : "none";
   if(locked) $("lockMsg").textContent="🔒 Issued — this invoice is final and can no longer be edited. You can still download it below.";
-  document.querySelectorAll(".controls input, .controls textarea, .controls .delbtn, #addItem, #newNo, #clearSig")
+  document.querySelectorAll(".controls input, .controls textarea, .controls .delbtn, .controls .insbtn, #addItem, #newNo, #clearSig")
     .forEach(el=>{ el.disabled = locked; });
   document.querySelectorAll(".upbtn").forEach(el=>{ el.style.opacity = locked?"0.45":""; el.style.pointerEvents = locked?"none":""; });
 }
@@ -659,6 +662,7 @@ function renderAdd(){
     r.innerHTML=`<input type="text" data-i="${i}" data-k="desc" value="${esc(it.desc)}" placeholder="Description">
       <input type="text" data-i="${i}" data-k="qty" value="${esc(String(it.qty!==undefined&&it.qty!==null?it.qty:''))}" placeholder="Qty or Lot">
       <input type="text" inputmode="numeric" data-i="${i}" data-k="price" value="${Number(it.price||0).toLocaleString('en-US')}">
+      <button class="insbtn" data-ins="${i}" title="Insert a new item below"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
       <button class="delbtn" data-del="${i}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>`;
     c.appendChild(r);
   });
@@ -667,6 +671,12 @@ function renderAdd(){
     if(k==="price"){ fmtCommas(e.target); addItems[i].price=parseFloat(e.target.value.replace(/,/g,""))||0; }
     else addItems[i][k]=e.target.value;
     calc(); queueAutosave();
+  }));
+  c.querySelectorAll(".insbtn").forEach(b=>b.addEventListener("click",()=>{
+    const at=+b.dataset.ins+1;
+    addItems.splice(at,0,{desc:"",qty:1,price:0});
+    renderAdd(); calc(); queueAutosave();
+    const next=c.querySelector(`input[data-i="${at}"][data-k="desc"]`); if(next) next.focus();
   }));
   c.querySelectorAll(".delbtn").forEach(b=>b.addEventListener("click",()=>{addItems.splice(+b.dataset.del,1);renderAdd();calc();queueAutosave();}));
 }
