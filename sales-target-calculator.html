@@ -134,6 +134,11 @@ window.KIRU_CONFIG = {
 
   <div class="layout">
     <div class="card controls">
+      <div class="sec" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span id="saveDot" style="width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none"></span>
+        <span id="saveStatus" style="flex:1;min-width:140px;font-size:.78rem;font-weight:700">Autosave on — starting…</span>
+        <button class="addbtn" id="saveNowBtn" style="width:auto;margin:0;padding:7px 14px">Save now</button>
+      </div>
       <div class="sec">
         <h2>Period &amp; target</h2>
         <div class="h2sub">The profit you want to keep after every cost below.</div>
@@ -173,7 +178,6 @@ window.KIRU_CONFIG = {
 
       <div class="exports">
         <button class="btn" id="dlPdf">Download PDF</button>
-        <div class="hint" id="saveStatus" style="margin-bottom:8px">Autosave on — your changes are saved in this browser.</div>
         <button class="btn" id="resetAll" style="background:transparent;color:var(--muted);border-color:var(--line);margin-bottom:10px">Reset to defaults</button>
         <div class="hint">Opens the print dialog — choose <b>Save as PDF</b>. Enable <b>Background graphics</b> for brand colours.</div>
       </div>
@@ -366,18 +370,21 @@ $("dealSize").addEventListener("input",e=>fmtCommasEl(e.target));
 const SAVE_KEY="kiru_sales_target_calc_v1", FIELDS=["period","netMargin","dealSize","reps","workDays"];
 const DEFAULTS=JSON.stringify({fixed,variable});
 let saveTimer=null;
-function setStatus(t){const el=$("saveStatus"); if(el) el.textContent=t;}
+function setStatus(t,state){
+  const el=$("saveStatus"); if(el) el.textContent=t;
+  const d=$("saveDot"); if(d) d.style.background = state==="ok"?"#1faa6b":state==="err"?"#d9534f":state==="warn"?"#e08a1e":"var(--muted)";
+}
 let SB=null, synced=false, userEmail="";
 const stamp=()=>new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
 async function saveCloud(){
   const period=$("period").value.trim();
-  if(!synced||!period) return false;
+  if(!synced||!period) return "Enter a Month first.";
   const {error}=await SB.from("sales_targets").upsert({
     period, net_margin:num($("netMargin").value), deal_size:num($("dealSize").value),
     reps:Math.round(num($("reps").value)), work_days:Math.round(num($("workDays").value)),
     fixed_costs:fixed, variable_costs:variable, created_by:userEmail, updated_at:new Date().toISOString()
   },{onConflict:"period"});
-  if(error){ console.error(error); return false; }
+  if(error){ console.error(error); return error.message||"unknown error"; }
   return true;
 }
 async function saveNow(){
@@ -387,12 +394,13 @@ async function saveNow(){
     localStorage.setItem(SAVE_KEY,JSON.stringify(data));
   }catch(e){ local=false; }
   if(synced && document.activeElement!==$("period")){
-    const ok=await saveCloud();
-    setStatus(ok ? "Autosaved to Supabase · "+stamp() : "Cloud save failed — saved in this browser only.");
+    const r=await saveCloud();
+    if(r===true) setStatus("Saved to Supabase · "+stamp(),"ok");
+    else setStatus("Supabase save failed: "+r+" (kept in this browser)","err");
   }else if(synced){
-    setStatus("Saved in this browser — will sync when you leave the Month field.");
+    setStatus("Saved in this browser — will sync when you leave the Month field.","warn");
   }else{
-    setStatus(local ? "Autosaved in this browser · "+stamp()+" (not signed in)" : "Autosave unavailable in this browser.");
+    setStatus(local ? "Saved in this browser only · "+stamp()+" — not signed in to Supabase" : "Autosave unavailable in this browser.","warn");
   }
 }
 function queueSave(){ clearTimeout(saveTimer); setStatus("Saving…"); saveTimer=setTimeout(saveNow,500); }
@@ -434,17 +442,18 @@ async function initCloud(){
     if(!window.supabase||!window.KIRU_CONFIG) return;
     SB=window.supabase.createClient(window.KIRU_CONFIG.SUPABASE_URL,window.KIRU_CONFIG.SUPABASE_ANON_KEY);
     const {data:{session}}=await SB.auth.getSession();
-    if(!session){ setStatus("Autosave on in this browser. Sign in from the main Kiru app, then reload, to save to Supabase."); return; }
+    if(!session){ setStatus("Not signed in — saving in this browser only. Sign in at the main Kiru app, then reload.","warn"); return; }
     userEmail=(session.user&&session.user.email)||"";
     const {data,error}=await SB.from("sales_targets").select("*").order("updated_at",{ascending:false}).limit(1);
-    if(error){ console.error(error); setStatus("Couldn't reach Supabase (has the sales_targets table been created?) — saving in this browser only."); return; }
+    if(error){ console.error(error); setStatus("Supabase error: "+error.message+" — saving in this browser only.","err"); return; }
     synced=true;
-    if(data&&data.length){ applyRow(data[0]); setStatus("Loaded "+data[0].period+" from Supabase."); }
-    else setStatus("Signed in — autosave will save to Supabase.");
+    if(data&&data.length){ applyRow(data[0]); setStatus("Loaded "+data[0].period+" from Supabase.","ok"); }
+    else setStatus("Signed in as "+userEmail+" — autosave will save to Supabase.","ok");
   }catch(e){ console.error(e); }
 }
 initCloud();
 window.addEventListener("beforeunload",()=>{ if(saveTimer){clearTimeout(saveTimer); saveNow();} });
+$("saveNowBtn").addEventListener("click",()=>{ clearTimeout(saveTimer); setStatus("Saving…"); saveNow(); });
 $("resetAll").addEventListener("click",()=>{
   if(!confirm("Reset all values to the defaults? Your saved session will be cleared.")) return;
   try{localStorage.removeItem(SAVE_KEY);}catch(e){}
