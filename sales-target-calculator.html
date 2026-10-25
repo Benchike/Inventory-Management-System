@@ -166,6 +166,8 @@
 
       <div class="exports">
         <button class="btn" id="dlPdf">Download PDF</button>
+        <div class="hint" id="saveStatus" style="margin-bottom:8px">Autosave on — your changes are saved in this browser.</div>
+        <button class="btn" id="resetAll" style="background:transparent;color:var(--muted);border-color:var(--line);margin-bottom:10px">Reset to defaults</button>
         <div class="hint">Opens the print dialog — choose <b>Save as PDF</b>. Enable <b>Background graphics</b> for brand colours.</div>
       </div>
     </div>
@@ -353,8 +355,44 @@ function calc(){
 
 $("dealSize").addEventListener("input",e=>fmtCommasEl(e.target));
 ["period","netMargin","dealSize","reps","workDays"].forEach(id=>$(id).addEventListener("input",calc));
+/* autosave (per browser) */
+const SAVE_KEY="kiru_sales_target_calc_v1", FIELDS=["period","netMargin","dealSize","reps","workDays"];
+const DEFAULTS=JSON.stringify({fixed,variable});
+let saveTimer=null;
+function setStatus(t){const el=$("saveStatus"); if(el) el.textContent=t;}
+function saveNow(){
+  try{
+    const data={fixed,variable}; FIELDS.forEach(id=>data[id]=$(id).value);
+    localStorage.setItem(SAVE_KEY,JSON.stringify(data));
+    setStatus("Autosaved · "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
+  }catch(e){ setStatus("Autosave unavailable in this browser."); }
+}
+function queueSave(){ clearTimeout(saveTimer); setStatus("Saving…"); saveTimer=setTimeout(saveNow,500); }
+function loadSaved(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY); if(!raw) return false;
+    const d=JSON.parse(raw);
+    if(Array.isArray(d.fixed)) fixed=d.fixed.map(r=>({name:r.name||"",amt:+r.amt||0}));
+    if(Array.isArray(d.variable)) variable=d.variable.map(r=>({name:r.name||"",p:+r.p||0}));
+    FIELDS.forEach(id=>{ if(d[id]!==undefined) $(id).value=d[id]; });
+    return true;
+  }catch(e){ return false; }
+}
 $("period").value=new Date().toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+const restored=loadSaved();
 renderRows(); calc();
+if(restored) setStatus("Restored your last saved session.");
+document.addEventListener("input",queueSave);
+document.addEventListener("click",e=>{ if(e.target.closest("[data-df],[data-dv],#addFixed,#addVar")) queueSave(); });
+window.addEventListener("beforeunload",()=>{ if(saveTimer){clearTimeout(saveTimer); saveNow();} });
+$("resetAll").addEventListener("click",()=>{
+  if(!confirm("Reset all values to the defaults? Your saved session will be cleared.")) return;
+  try{localStorage.removeItem(SAVE_KEY);}catch(e){}
+  const d=JSON.parse(DEFAULTS); fixed=d.fixed; variable=d.variable;
+  $("period").value=new Date().toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+  $("netMargin").value="15"; $("dealSize").value="2,500,000"; $("reps").value="3"; $("workDays").value="24";
+  renderRows(); calc(); setStatus("Reset to defaults.");
+});
 $("dlPdf").addEventListener("click",()=>window.print());
 </script>
 </body>
