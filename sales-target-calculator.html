@@ -6,6 +6,13 @@
 <title>Kiru Energy — Sales Target Calculator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+window.KIRU_CONFIG = {
+  SUPABASE_URL: "https://mfthkjtoggofjjmwyekt.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_la6NVRk4WPj5e4FDNB_rMQ_ArsAf3jV"
+};
+</script>
 <style>
   :root{--blue:#00a4ff;--blue-deep:#0086d4;--navy:#021431;--green:#1faa6b;--amber:#e08a1e;--red:#d9534f;--radius:14px;--bg:#eef3f9;
     --page-grad:radial-gradient(1000px 500px at 92% -10%, rgba(0,164,255,.10), transparent 60%);
@@ -360,12 +367,33 @@ const SAVE_KEY="kiru_sales_target_calc_v1", FIELDS=["period","netMargin","dealSi
 const DEFAULTS=JSON.stringify({fixed,variable});
 let saveTimer=null;
 function setStatus(t){const el=$("saveStatus"); if(el) el.textContent=t;}
-function saveNow(){
+let SB=null, synced=false, userEmail="";
+const stamp=()=>new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+async function saveCloud(){
+  const period=$("period").value.trim();
+  if(!synced||!period) return false;
+  const {error}=await SB.from("sales_targets").upsert({
+    period, net_margin:num($("netMargin").value), deal_size:num($("dealSize").value),
+    reps:Math.round(num($("reps").value)), work_days:Math.round(num($("workDays").value)),
+    fixed_costs:fixed, variable_costs:variable, created_by:userEmail, updated_at:new Date().toISOString()
+  },{onConflict:"period"});
+  if(error){ console.error(error); return false; }
+  return true;
+}
+async function saveNow(){
+  let local=true;
   try{
     const data={fixed,variable}; FIELDS.forEach(id=>data[id]=$(id).value);
     localStorage.setItem(SAVE_KEY,JSON.stringify(data));
-    setStatus("Autosaved · "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
-  }catch(e){ setStatus("Autosave unavailable in this browser."); }
+  }catch(e){ local=false; }
+  if(synced && document.activeElement!==$("period")){
+    const ok=await saveCloud();
+    setStatus(ok ? "Autosaved to Supabase · "+stamp() : "Cloud save failed — saved in this browser only.");
+  }else if(synced){
+    setStatus("Saved in this browser — will sync when you leave the Month field.");
+  }else{
+    setStatus(local ? "Autosaved in this browser · "+stamp()+" (not signed in)" : "Autosave unavailable in this browser.");
+  }
 }
 function queueSave(){ clearTimeout(saveTimer); setStatus("Saving…"); saveTimer=setTimeout(saveNow,500); }
 function loadSaved(){
@@ -383,7 +411,39 @@ const restored=loadSaved();
 renderRows(); calc();
 if(restored) setStatus("Restored your last saved session.");
 document.addEventListener("input",queueSave);
+$("period").addEventListener("change",async()=>{
+  if(synced){
+    const period=$("period").value.trim();
+    if(period){
+      const {data}=await SB.from("sales_targets").select("*").eq("period",period).maybeSingle();
+      if(data){ applyRow(data); setStatus("Loaded saved figures for "+period+"."); return; }
+    }
+  }
+  queueSave();
+});
 document.addEventListener("click",e=>{ if(e.target.closest("[data-df],[data-dv],#addFixed,#addVar")) queueSave(); });
+function applyRow(d){
+  fixed=Array.isArray(d.fixed_costs)?d.fixed_costs.map(r=>({name:r.name||"",amt:+r.amt||0})):fixed;
+  variable=Array.isArray(d.variable_costs)?d.variable_costs.map(r=>({name:r.name||"",p:+r.p||0})):variable;
+  $("period").value=d.period; $("netMargin").value=d.net_margin; $("dealSize").value=n0.format(d.deal_size);
+  $("reps").value=d.reps; $("workDays").value=d.work_days;
+  renderRows(); calc();
+}
+async function initCloud(){
+  try{
+    if(!window.supabase||!window.KIRU_CONFIG) return;
+    SB=window.supabase.createClient(window.KIRU_CONFIG.SUPABASE_URL,window.KIRU_CONFIG.SUPABASE_ANON_KEY);
+    const {data:{session}}=await SB.auth.getSession();
+    if(!session){ setStatus("Autosave on in this browser. Sign in from the main Kiru app, then reload, to save to Supabase."); return; }
+    userEmail=(session.user&&session.user.email)||"";
+    const {data,error}=await SB.from("sales_targets").select("*").order("updated_at",{ascending:false}).limit(1);
+    if(error){ console.error(error); setStatus("Couldn't reach Supabase (has the sales_targets table been created?) — saving in this browser only."); return; }
+    synced=true;
+    if(data&&data.length){ applyRow(data[0]); setStatus("Loaded "+data[0].period+" from Supabase."); }
+    else setStatus("Signed in — autosave will save to Supabase.");
+  }catch(e){ console.error(e); }
+}
+initCloud();
 window.addEventListener("beforeunload",()=>{ if(saveTimer){clearTimeout(saveTimer); saveNow();} });
 $("resetAll").addEventListener("click",()=>{
   if(!confirm("Reset all values to the defaults? Your saved session will be cleared.")) return;
