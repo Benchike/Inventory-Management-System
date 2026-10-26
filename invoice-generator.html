@@ -616,6 +616,11 @@ async function newInvoice(){
   $("bankName").value="Wema Bank"; $("accountName").value="Kiru Energy Ltd"; $("accountNumber").value="127429081";
   $("signName").value="Chidi Okoronkwo"; $("signTitle").value="Head of Sales";
   $("signFile").value=""; applyCustomSig("");
+  try{ /* lead handed over from the Sales CRM */
+    const pf=JSON.parse(localStorage.getItem("kiru_invoice_prefill")||"null");
+    if(pf){ localStorage.removeItem("kiru_invoice_prefill");
+      if(Date.now()-(pf.t||0)<10*60*1000){ $("clientName").value=pf.clientName||$("clientName").value; if(pf.clientAddr) $("clientAddr").value=pf.clientAddr; } }
+  }catch(e){}
   renderAdd(); calc(); applyLock();
 }
 async function genNoRemote(){
