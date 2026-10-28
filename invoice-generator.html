@@ -171,6 +171,39 @@ window.KIRU_CONFIG = {
   .pv-sig .role{font-size:10.5px;color:#56657a;font-weight:500}
   .pv-foot{text-align:center;font-size:11px;color:#8392a5;margin-top:24px}
 
+  /* ===== IMPERIUM TEMPLATE ===== */
+  .controls select{width:100%;font-family:inherit;font-size:.86rem;color:var(--text);background:var(--card-bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px;outline:none}
+  .controls select:focus{border-color:var(--blue)}
+  .auditrow{display:grid;grid-template-columns:1fr 46px 62px 54px auto;gap:6px;align-items:center;margin-bottom:8px}
+  .auditrow input:nth-child(n+2){text-align:center}
+  .imp .secbar{background:#021431;color:#fff;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:9px 14px;border-radius:8px}
+  .imp .impsec{margin-top:24px;break-inside:avoid;page-break-inside:avoid}
+  .imp table.items4,.imp table.audit{width:100%;border-collapse:collapse;margin-top:24px}
+  .imp table.audit{margin-top:10px}
+  .imp table.items4 th,.imp table.audit th{background:#021431;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;padding:10px 12px;text-align:left}
+  .imp table.items4 td,.imp table.audit td{padding:11px 12px;border-bottom:1px solid #eaeef4;font-size:12.5px;vertical-align:top;font-variant-numeric:tabular-nums}
+  .imp table.items4 td .d{font-weight:600}
+  .imp table.items4 th:nth-child(2),.imp table.items4 td:nth-child(2){text-align:center}
+  .imp table.items4 th:nth-child(3),.imp table.items4 td:nth-child(3),.imp table.items4 th:nth-child(4),.imp table.items4 td:nth-child(4){text-align:right}
+  .imp table.audit th,.imp table.audit td{text-align:center}
+  .imp table.audit th:nth-child(2),.imp table.audit td:nth-child(2){text-align:left;font-weight:600}
+  .imp table.audit th:nth-child(1),.imp table.audit td:nth-child(1){width:42px}.imp table.audit td:nth-child(1){color:#56657a}
+  .imp table.audit tr.tot td{background:#021431;color:#fff;font-weight:800;border:none}
+  .imp .imstats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+  .imp .imstat{border:1px solid #e3e9f1;border-radius:10px;background:#f7fafd;padding:10px 14px}
+  .imp .imstat .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.08em;color:#56657a;font-weight:700}
+  .imp .imstat .v{font-size:16px;font-weight:800;margin-top:2px}
+  .imp .imgbox{border:1px solid #e3e9f1;border-radius:10px;padding:10px;margin-top:10px;background:#fff;text-align:center}
+  .imp .imgbox img{max-width:100%;max-height:420px;display:block;margin:0 auto}
+  .imp .terms .t{font-weight:700;font-size:12.5px}
+  .imp .terms .x{font-size:11.5px;color:#56657a;margin-top:4px;white-space:pre-line;max-width:520px;line-height:1.55}
+  .imp .contact{margin-top:18px;break-inside:avoid;page-break-inside:avoid}
+  .imp .contact .bar{height:3px;border-radius:3px;background:linear-gradient(90deg,#00a4ff,#dbe7f3 50%,#00a4ff)}
+  .imp .contact .row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;font-size:12px}
+  .imp .contact .row span{display:inline-flex;align-items:center;gap:8px}
+  .imp .contact svg{width:18px;height:18px;flex:none}
+  .imp *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
   @page{size:A4;margin:10mm}
   @media print{
     body{background:#fff!important;background-image:none!important}
@@ -219,6 +252,8 @@ window.KIRU_CONFIG = {
           <button class="btn issue" id="issueBtn">Issue invoice</button>
         </div>
         <div class="lockmsg" id="lockMsg" style="display:none;margin-bottom:12px"></div>
+        <div class="mb"><span class="lab">Invoice template</span>
+          <select id="tplSel"><option value="standard">Standard invoice</option><option value="imperium">Imperium Invoice</option></select></div>
         <div class="mb"><span class="lab">Invoice number</span>
           <div class="invno"><input type="text" id="invNo"><button class="minibtn" id="newNo">New</button></div></div>
         <div class="row2 mb">
@@ -229,7 +264,7 @@ window.KIRU_CONFIG = {
         <div><span class="lab">Client address</span><textarea id="clientAddr">Shop address, Market, City</textarea></div>
       </div>
 
-      <div class="sec">
+      <div class="sec" id="secEquip">
         <h2>Equipment</h2>
         <div class="eqblock">
           <div class="nm">Solar panels</div>
@@ -252,10 +287,30 @@ window.KIRU_CONFIG = {
       </div>
 
       <div class="sec">
-        <h2>Other items included</h2>
+        <h2 id="addHead">Other items included</h2>
         <div class="tiny">Description · Qty · Unit price (₦)</div>
         <div id="addItems"></div>
         <button class="addbtn" id="addItem">+ Add item</button>
+      </div>
+
+      <div class="sec" id="secAudit" style="display:none">
+        <h2>Energy audit</h2>
+        <div class="tiny">Appliance · Qty · Power (W) · Hours/day</div>
+        <div id="auditRows"></div>
+        <button class="addbtn" id="addAppliance">+ Add appliance</button>
+      </div>
+
+      <div class="sec" id="secDiagram" style="display:none">
+        <h2>System block diagram</h2>
+        <span class="lab">Diagram image <small>(PNG or JPG — leave empty to hide this section)</small></span>
+        <label class="upbtn">Upload diagram<input type="file" id="diagramFile" accept="image/*" style="display:none"></label>
+        <img id="diagramThumb" class="upthumb" alt="diagram">
+        <button class="minibtn" id="clearDiagram" style="margin-top:8px;display:none">Remove diagram</button>
+      </div>
+
+      <div class="sec" id="secTerms" style="display:none">
+        <h2>Terms and conditions</h2>
+        <textarea id="terms" style="min-height:90px"></textarea>
       </div>
 
       <div class="sec">
@@ -342,6 +397,83 @@ window.KIRU_CONFIG = {
           </div>
         </div>
         <div class="pv-foot">Thank you for your business. · Kiru Energy Ltd</div>
+      </div>
+      <div class="paper imp" id="invoiceImp" style="display:none">
+        <div class="pv-top">
+          <div>
+            <img id="im_logo" alt="Kiru Energy" style="height:48px">
+            <div class="pv-co"><b>Kiru Energy Ltd</b> · RC 1619891<br>Lagos, Nigeria</div>
+          </div>
+          <div class="pv-inv">
+            <div class="t">INVOICE</div>
+            <div class="meta"><span id="im_no"></span><br><span id="im_date"></span><span id="im_due"></span></div>
+          </div>
+        </div>
+
+        <div class="pv-billrow">
+          <div class="pv-bill">
+            <div class="h">Bill to</div>
+            <div class="nm" id="im_client"></div>
+            <div class="ad" id="im_addr"></div>
+          </div>
+        </div>
+
+        <table class="items4">
+          <thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr></thead>
+          <tbody id="im_items"></tbody>
+        </table>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:22px;break-inside:avoid">
+          <div class="pv-totbox">
+            <div class="l">Total amount payable</div>
+            <div class="v" id="im_total">₦0</div>
+          </div>
+        </div>
+
+        <div class="impsec" id="im_auditSec" style="display:none">
+          <div class="secbar">Energy audit</div>
+          <table class="audit">
+            <thead><tr><th>S/N</th><th>Appliance</th><th>Qty</th><th>Unit power (W)</th><th>Usage time (hr)</th><th>Energy usage (Wh)</th></tr></thead>
+            <tbody id="im_audit"></tbody>
+          </table>
+          <div class="imstats">
+            <div class="imstat"><div class="k">Total connected load</div><div class="v" id="im_load">0 W</div></div>
+            <div class="imstat"><div class="k">Daily energy demand</div><div class="v" id="im_kwh">0 kWh</div></div>
+            <div class="imstat"><div class="k">Appliances</div><div class="v" id="im_cnt">0</div></div>
+          </div>
+        </div>
+
+        <div class="impsec" id="im_diagSec" style="display:none">
+          <div class="secbar">System block diagram</div>
+          <div class="imgbox"><img id="im_diag" alt="System block diagram"></div>
+        </div>
+
+        <div class="pv-bottom" style="break-inside:avoid">
+          <div class="pv-bank">
+            <div class="h">Payment details</div>
+            <div class="b" id="im_bank"></div>
+          </div>
+          <div class="pv-sig">
+            <div class="h">Authorised by</div>
+            <div class="slot" id="im_stampSlot"><img id="im_stamp" alt="signature"></div>
+            <div class="cs" id="im_customSigWrap" style="display:none"><img id="im_customSigImg" alt="signature"></div>
+            <div class="ln" id="im_signName">Chidi Okoronkwo<div class="role" id="im_signRole">Head of Sales · Kiru Energy Ltd</div></div>
+          </div>
+        </div>
+
+        <div class="terms" id="im_termsSec" style="margin-top:22px;break-inside:avoid;display:none">
+          <div class="t">Terms and Conditions:</div>
+          <div class="x" id="im_terms"></div>
+        </div>
+
+        <div class="contact">
+          <div class="bar"></div>
+          <div class="row">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="#00a4ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>+234-813-026-6232</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="#00a4ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Business@ourkiru.com</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="#00a4ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>44 Bourdillon Road, Ikoyi, Lagos</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -454,7 +586,9 @@ function rowToInvoice(r){
     addItems: Array.isArray(r.add_items)?r.add_items:[],
     status:r.status||"draft",
     bankName:r.bank_name||"", accountName:r.account_name||"", accountNumber:r.account_number||"",
-    signName:r.sign_name||"", signTitle:r.sign_title||"", signature:r.signature||""};
+    signName:r.sign_name||"", signTitle:r.sign_title||"", signature:r.signature||"",
+    hasTplCols:("template" in r), template:r.template||"standard",
+    audit:Array.isArray(r.audit)?r.audit:[], diagram:r.diagram||"", terms:r.terms||""};
 }
 function formToRow(){
   return {inv_no:val("invNo"), inv_date:val("invDate")||null, due_date:val("dueDate")||null,
@@ -464,7 +598,8 @@ function formToRow(){
     batt_name:val("battName"), batt_cap:num("battCap"), batt_qty:num("battQty"), batt_price:num("battPrice"),
     add_items:addItems, total_amt:grandTotal,
     bank_name:val("bankName"), account_name:val("accountName"), account_number:val("accountNumber"),
-    sign_name:val("signName"), sign_title:val("signTitle"), signature:customSig};
+    sign_name:val("signName"), sign_title:val("signTitle"), signature:customSig,
+    ...((tplCols||tpl()==="imperium")?(tplCols=true,{template:tpl(),audit:audit,diagram:diagram,terms:val("terms")}):{})};
 }
 function loadInvoiceIntoForm(inv){
   curId=inv._id; curStatus=inv.status;
@@ -483,6 +618,11 @@ function loadInvoiceIntoForm(inv){
   const th=$("signThumb");
   if(customSig){ th.src=customSig; th.classList.add("show"); $("clearSig").style.display="inline-block"; }
   else { th.classList.remove("show"); th.removeAttribute("src"); $("clearSig").style.display="none"; }
+  if(inv.hasTplCols) tplCols=true;
+  $("tplSel").value=inv.template||"standard";
+  audit=(inv.audit||[]).map(a=>({name:a.name||"",qty:a.qty??"",power:a.power??"",hours:a.hours??""}));
+  diagram=inv.diagram||""; $("terms").value=inv.template==="imperium"?inv.terms:DEFAULT_TERMS;
+  renderAudit(); showDiagramThumb(); applyTemplate();
   renderAdd(); calc(); applyLock();
 }
 function applyLock(){
@@ -493,7 +633,7 @@ function applyLock(){
   $("lifecycleBar").style.display = locked ? "none" : "flex";
   $("lockMsg").style.display = locked ? "block" : "none";
   if(locked) $("lockMsg").textContent="🔒 Issued — this invoice is final and can no longer be edited. You can still download it below.";
-  document.querySelectorAll(".controls input, .controls textarea, .controls .delbtn, .controls .insbtn, #addItem, #newNo, #clearSig")
+  document.querySelectorAll(".controls input, .controls textarea, .controls select, .controls .delbtn, .controls .insbtn, #addItem, #addAppliance, #clearDiagram, #newNo, #clearSig")
     .forEach(el=>{ el.disabled = locked; });
   document.querySelectorAll(".upbtn").forEach(el=>{ el.style.opacity = locked?"0.45":""; el.style.pointerEvents = locked?"none":""; });
 }
@@ -621,6 +761,8 @@ async function newInvoice(){
     if(pf){ localStorage.removeItem("kiru_invoice_prefill");
       if(Date.now()-(pf.t||0)<10*60*1000){ $("clientName").value=pf.clientName||$("clientName").value; if(pf.clientAddr) $("clientAddr").value=pf.clientAddr; } }
   }catch(e){}
+  $("tplSel").value="standard"; audit=[]; diagram=""; $("terms").value=DEFAULT_TERMS;
+  renderAudit(); showDiagramThumb(); applyTemplate();
   renderAdd(); calc(); applyLock();
 }
 async function genNoRemote(){
@@ -686,7 +828,115 @@ function renderAdd(){
   c.querySelectorAll(".delbtn").forEach(b=>b.addEventListener("click",()=>{addItems.splice(+b.dataset.del,1);renderAdd();calc();queueAutosave();}));
 }
 
+/* ============ IMPERIUM TEMPLATE ============ */
+const DEFAULT_TERMS="Due to inflation and other market conditions, prices stated on this invoice are subject to review after 10 days from the date of issue.";
+let audit=[], diagram="", tplCols=false;
+const tpl=()=>$("tplSel").value;
+const fmtN=n=>Number(n||0).toLocaleString("en-US",{maximumFractionDigits:2});
+function applyTemplate(){
+  const imp=tpl()==="imperium";
+  $("invoice").style.display=imp?"none":"";
+  $("invoiceImp").style.display=imp?"":"none";
+  $("secEquip").style.display=imp?"none":"";
+  ["secAudit","secDiagram","secTerms"].forEach(id=>$(id).style.display=imp?"":"none");
+  $("addHead").textContent=imp?"Line items":"Other items included";
+}
+function renderAudit(){
+  const c=$("auditRows"); c.innerHTML="";
+  audit.forEach((a,i)=>{
+    const r=document.createElement("div"); r.className="auditrow";
+    r.innerHTML=`<input type="text" data-i="${i}" data-k="name" value="${esc(a.name)}" placeholder="Appliance">
+      <input type="text" inputmode="decimal" data-i="${i}" data-k="qty" value="${esc(String(a.qty??""))}">
+      <input type="text" inputmode="decimal" data-i="${i}" data-k="power" value="${esc(String(a.power??""))}">
+      <input type="text" inputmode="decimal" data-i="${i}" data-k="hours" value="${esc(String(a.hours??""))}">
+      <button class="delbtn" data-del="${i}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>`;
+    c.appendChild(r);
+  });
+  c.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",e=>{
+    audit[+e.target.dataset.i][e.target.dataset.k]=e.target.value; calc(); queueAutosave();
+  }));
+  c.querySelectorAll(".delbtn").forEach(b=>b.addEventListener("click",()=>{audit.splice(+b.dataset.del,1);renderAudit();calc();queueAutosave();}));
+}
+function showDiagramThumb(){
+  const th=$("diagramThumb");
+  if(diagram){ th.src=diagram; th.classList.add("show"); $("clearDiagram").style.display="inline-block"; }
+  else { th.classList.remove("show"); th.removeAttribute("src"); $("clearDiagram").style.display="none"; }
+}
+function calcImperium(){
+  const lines=[];
+  addItems.forEach(it=>{
+    if(!(it.desc||"").trim()) return;
+    const lot=isLotQty(it.qty);
+    lines.push({d:it.desc,qty:lot?"Lot":(parseFloat(it.qty)||0),price:it.price||0,lot});
+  });
+  let body="", total=0;
+  lines.forEach(l=>{
+    const amt=l.lot?(l.price||0):(l.qty||0)*(l.price||0);
+    total+=amt;
+    body+=`<tr><td><span class="d">${esc(l.d)}</span></td><td>${l.qty||0}</td><td>${l.price?ngn.format(l.price):"—"}</td><td>${amt?ngn.format(amt):"—"}</td></tr>`;
+  });
+  $("im_items").innerHTML=body;
+  grandTotal=total;
+  $("totalDisplay").textContent=ngn.format(total);
+  $("im_total").textContent=ngn.format(total);
+
+  $("im_no").innerHTML="<b>No:</b> "+(val("invNo")||"—");
+  $("im_date").innerHTML="<b>Date:</b> "+(fmtDate(val("invDate"))||"—");
+  $("im_due").innerHTML=val("dueDate")?"<br><b>Due:</b> "+fmtDate(val("dueDate")):"";
+  $("im_client").textContent=val("clientName")||"—";
+  $("im_addr").textContent=val("clientAddr")||"";
+
+  const rows=audit.filter(a=>(a.name||"").trim());
+  let load=0, wh=0, ab="";
+  rows.forEach((a,i)=>{
+    const q=parseFloat(a.qty)||0, w=parseFloat(a.power)||0, h=parseFloat(a.hours)||0;
+    load+=q*w; wh+=q*w*h;
+    ab+=`<tr><td>${i+1}</td><td>${esc(a.name)}</td><td>${fmtN(q)}</td><td>${fmtN(w)}</td><td>${fmtN(h)}</td><td>${fmtN(q*w*h)}</td></tr>`;
+  });
+  if(rows.length) ab+=`<tr class="tot"><td></td><td>TOTAL</td><td></td><td>${fmtN(load)}</td><td></td><td>${fmtN(wh)}</td></tr>`;
+  $("im_audit").innerHTML=ab;
+  $("im_auditSec").style.display=rows.length?"":"none";
+  $("im_load").textContent=fmtN(load)+" W";
+  $("im_kwh").textContent=fmtN(Math.round(wh)/1000)+" kWh";
+  $("im_cnt").textContent=rows.length;
+
+  $("im_diagSec").style.display=diagram?"":"none";
+  if(diagram) $("im_diag").src=diagram;
+
+  $("im_bank").innerHTML=`Bank: <b>${esc(val("bankName"))||"—"}</b><br>Account name: <b>${esc(val("accountName"))||"—"}</b><br>Account number: <b>${esc(val("accountNumber"))||"—"}</b>`;
+  $("im_signName").firstChild.textContent=val("signName")||"—";
+  $("im_signRole").textContent=(val("signTitle")||"—")+" · Kiru Energy Ltd";
+  if(customSig){ $("im_stampSlot").style.display="none"; $("im_customSigWrap").style.display="flex"; $("im_customSigImg").src=customSig; }
+  else { $("im_stampSlot").style.display="flex"; $("im_customSigWrap").style.display="none"; }
+
+  const t=val("terms").trim();
+  $("im_termsSec").style.display=t?"":"none";
+  $("im_terms").textContent=t;
+}
+$("im_logo").src=document.querySelector("#invoice .pv-top img").src;
+$("im_stamp").src=document.querySelector("#invoice .pv-sig .slot img").src;
+$("tplSel").addEventListener("change",()=>{ if(tpl()==="imperium") tplCols=true; applyTemplate(); calc(); queueAutosave(); });
+$("terms").addEventListener("input",()=>{calc();queueAutosave();});
+$("addAppliance").addEventListener("click",()=>{audit.push({name:"",qty:1,power:"",hours:""});renderAudit();calc();queueAutosave();});
+$("diagramFile").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    const img=new Image();
+    img.onload=()=>{
+      const maxW=1400, k=Math.min(1,maxW/img.width), cv=document.createElement("canvas");
+      cv.width=Math.round(img.width*k); cv.height=Math.round(img.height*k);
+      const ctx=cv.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height); ctx.drawImage(img,0,0,cv.width,cv.height);
+      diagram=cv.toDataURL("image/jpeg",0.9); showDiagramThumb(); calc(); queueAutosave();
+    };
+    img.src=r.result;
+  };
+  r.readAsDataURL(f); e.target.value="";
+});
+$("clearDiagram").addEventListener("click",()=>{diagram="";showDiagramThumb();calc();queueAutosave();});
+
 function calc(){
+  if(tpl()==="imperium"){ calcImperium(); return; }
   const pc=num("panelCap"),pq=num("panelQty"),pp=num("panelPrice");
   const ic=num("invCap"),iq=num("invQty"),ip=num("invPrice");
   const bc=num("battCap"),bq=num("battQty"),bp=num("battPrice");
@@ -741,7 +991,7 @@ $("newInvBtn2").addEventListener("click",handleNewInvoiceClick);
 $("saveDraft").addEventListener("click",saveDraft);
 $("issueBtn").addEventListener("click",issueInvoice);
 
-async function snap(){ return await html2canvas($("invoice"),{scale:2,backgroundColor:"#ffffff",useCORS:true}); }
+async function snap(){ return await html2canvas(tpl()==="imperium"?$("invoiceImp"):$("invoice"),{scale:2,backgroundColor:"#ffffff",useCORS:true}); }
 async function downloadPng(){
   const c=await snap(); const a=document.createElement("a"); a.download=(val("invNo")||"invoice")+".png"; a.href=c.toDataURL("image/png"); a.click();
 }
