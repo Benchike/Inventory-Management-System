@@ -205,6 +205,7 @@
   @media print{ body.landscape{} }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/idle-timeout.js"></script>
 <script>
 /* ====== CONFIGURE ME ======
    Paste the two values from Supabase → Project Settings → API.
@@ -239,6 +240,10 @@ window.KIRU_CONFIG = {
     </div>
     <!-- create account panel -->
     <div id="panel_signup" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="mb"><span class="lab">First name</span><input type="text" id="su_first" autocomplete="given-name"></div>
+        <div class="mb"><span class="lab">Last name</span><input type="text" id="su_last" autocomplete="family-name"></div>
+      </div>
       <div class="mb"><span class="lab">Work email <small>(@ourkiru.com only)</small></span><input type="email" id="su_email" autocomplete="username"></div>
       <div class="mb"><span class="lab">Password</span><input type="password" id="su_pass" autocomplete="new-password"></div>
       <div class="mb"><span class="lab">Confirm password</span><input type="password" id="su_pass2" autocomplete="new-password"></div>
@@ -443,7 +448,18 @@ function packageCost(pkg){return (pkg.components||[]).reduce((s,c)=>{const it=it
 function isAdmin(){return USER&&USER.email===(window.KIRU_CONFIG.ADMIN_EMAIL||"").toLowerCase();}
 
 /* ============ AUTH ============ */
+// Name collected at sign-up (stored in the account's user_metadata); older accounts fall back to the email name.
+function displayName(u){
+  const m=(u&&u.user_metadata)||{};
+  const full=((m.first_name||"")+" "+(m.last_name||"")).trim()||(m.full_name||"").trim();
+  if(full) return full;
+  const e=((u&&u.email)||"").split("@")[0].split(/[._-]/)[0];
+  return e?e.charAt(0).toUpperCase()+e.slice(1):"there";
+}
 async function boot(){
+  if(window.KiruIdle&&KiruIdle.consumeNotice()){
+    $("gateMsg").textContent="You were signed out after "+KiruIdle.limitMinutes+" minutes of inactivity. Please sign in again.";
+  }
   if(!initSB()){
     $("gateWarn").innerHTML='<div class="banner" style="margin-bottom:12px"><div>This app is not configured yet. Open <b>index.html</b> and paste your Supabase URL and anon key into <b>KIRU_CONFIG</b>, then redeploy.</div></div>';
     return;
@@ -456,7 +472,8 @@ async function onSignedIn(user){
   USER=user;
   $("gate").classList.add("hide");
   $("app").style.display="";
-  $("userEmail").textContent=user.email;
+  $("userEmail").textContent=displayName(user);
+  if(window.KiruIdle) KiruIdle.touch();
   // start at home — no module selected yet
   currentModule=null;
   updateHeaderForModule();
@@ -542,8 +559,7 @@ function homeToolEl(ws,t,compact){
 }
 function viewHome(){
   $("tabs").innerHTML="";
-  const email=(USER&&USER.email)||"", nm=email.split("@")[0].split(/[._-]/)[0]||"there";
-  const first=nm.charAt(0).toUpperCase()+nm.slice(1);
+  const first=displayName(USER);
   const h=new Date().getHours(), greet=h<12?"Good morning":h<17?"Good afternoon":"Good evening";
   const today=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"});
   const byId={}; HOME_WS.forEach(ws=>ws.tools.forEach(t=>{ if(!byId[ws.id+"|"+t.nm]) byId[ws.id+"|"+t.nm]={ws,t}; }));
@@ -626,13 +642,15 @@ async function signUp(){
   const pass=$("su_pass").value;
   const pass2=$("su_pass2").value;
   const code=$("su_code").value.trim();
-  if(!email||!pass||!pass2||!code){$("gateMsg").textContent="Please fill in all fields";return;}
+  const tidy=s=>s.trim().replace(/\s+/g," ");
+  const first=tidy($("su_first").value), last=tidy($("su_last").value);
+  if(!first||!last||!email||!pass||!pass2||!code){$("gateMsg").textContent="Please fill in all fields, including your first and last name";return;}
   if(!email.endsWith("@"+allowedDomain)){$("gateMsg").textContent="Sign-up is restricted to @"+allowedDomain+" email addresses";return;}
   if(pass.length<8){$("gateMsg").textContent="Password must be at least 8 characters";return;}
   if(pass!==pass2){$("gateMsg").textContent="Passwords do not match";return;}
   if(code!==correctCode){$("gateMsg").textContent="Team access code is incorrect";return;}
   $("gateMsg").textContent="Creating account…";
-  const {data,error}=await SB.auth.signUp({email,password:pass});
+  const {data,error}=await SB.auth.signUp({email,password:pass,options:{data:{first_name:first,last_name:last,full_name:first+" "+last}}});
   if(error){$("gateMsg").textContent=error.message;return;}
   if(data.user&&data.session){
     $("gateMsg").textContent="";
