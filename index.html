@@ -449,10 +449,10 @@ function isAdmin(){return USER&&USER.email===(window.KIRU_CONFIG.ADMIN_EMAIL||""
 
 /* ============ AUTH ============ */
 // Name collected at sign-up (stored in the account's user_metadata); older accounts fall back to the email name.
-function displayName(u){
+function displayName(u,firstOnly){
   const m=(u&&u.user_metadata)||{};
   const full=((m.first_name||"")+" "+(m.last_name||"")).trim()||(m.full_name||"").trim();
-  if(full) return full;
+  if(full) return firstOnly?(m.first_name||full.split(" ")[0]):full;
   const e=((u&&u.email)||"").split("@")[0].split(/[._-]/)[0];
   return e?e.charAt(0).toUpperCase()+e.slice(1):"there";
 }
@@ -559,7 +559,7 @@ function homeToolEl(ws,t,compact){
 }
 function viewHome(){
   $("tabs").innerHTML="";
-  const first=displayName(USER);
+  const first=displayName(USER,true);
   const h=new Date().getHours(), greet=h<12?"Good morning":h<17?"Good afternoon":"Good evening";
   const today=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"});
   const byId={}; HOME_WS.forEach(ws=>ws.tools.forEach(t=>{ if(!byId[ws.id+"|"+t.nm]) byId[ws.id+"|"+t.nm]={ws,t}; }));
