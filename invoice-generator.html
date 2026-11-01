@@ -184,8 +184,8 @@ window.KIRU_CONFIG = {
   .imp table.items4 th,.imp table.audit th{background:#021431;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;padding:10px 12px;text-align:left}
   .imp table.items4 td,.imp table.audit td{padding:11px 12px;border-bottom:1px solid #eaeef4;font-size:12.5px;vertical-align:top;font-variant-numeric:tabular-nums}
   .imp table.items4 td .d{font-weight:600}
-  .imp table.items4 th:nth-child(2),.imp table.items4 td:nth-child(2){text-align:center}
-  .imp table.items4 th:nth-child(3),.imp table.items4 td:nth-child(3),.imp table.items4 th:nth-child(4),.imp table.items4 td:nth-child(4){text-align:right}
+  .imp table.items4 th:nth-child(2),.imp table.items4 td:nth-child(2),.imp table.items4 th:nth-child(3),.imp table.items4 td:nth-child(3){text-align:center}
+  .imp table.items4 th:nth-child(4),.imp table.items4 td:nth-child(4),.imp table.items4 th:nth-child(5),.imp table.items4 td:nth-child(5){text-align:right}
   .imp table.audit th,.imp table.audit td{text-align:center}
   .imp table.audit th:nth-child(2),.imp table.audit td:nth-child(2){text-align:left;font-weight:600}
   .imp table.audit th:nth-child(1),.imp table.audit td:nth-child(1){width:42px}.imp table.audit td:nth-child(1){color:#56657a}
@@ -420,11 +420,17 @@ window.KIRU_CONFIG = {
         </div>
 
         <table class="items4">
-          <thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr></thead>
+          <thead><tr><th>Description</th><th>Capacity</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr></thead>
           <tbody id="im_items"></tbody>
         </table>
 
-        <div style="display:flex;justify-content:flex-end;margin-top:22px;break-inside:avoid">
+        <div class="pv-mid">
+          <div class="pv-sys" id="im_sysBox">
+            <div class="h">System size summary</div>
+            <div class="srow"><span>Solar array</span><span class="v" id="im_array">0 kWp</span></div>
+            <div class="srow"><span>Inverter capacity</span><span class="v" id="im_invcap">0 kVA</span></div>
+            <div class="srow"><span>Battery capacity</span><span class="v" id="im_battcap">0 kWh</span></div>
+          </div>
           <div class="pv-totbox">
             <div class="l">Total amount payable</div>
             <div class="v" id="im_total">₦0</div>
@@ -838,8 +844,7 @@ function applyTemplate(){
   const imp=tpl()==="imperium";
   $("invoice").style.display=imp?"none":"";
   $("invoiceImp").style.display=imp?"":"none";
-  $("secEquip").style.display=imp?"none":"";
-  ["secAudit","secDiagram","secTerms"].forEach(id=>$(id).style.display=imp?"":"none");
+    ["secAudit","secDiagram","secTerms"].forEach(id=>$(id).style.display=imp?"":"none");
   $("addHead").textContent=imp?"Line items":"Other items included";
 }
 function renderAudit(){
@@ -865,21 +870,35 @@ function showDiagramThumb(){
 }
 function calcImperium(){
   const lines=[];
+  const pc=num("panelCap"),pq=num("panelQty"),pp=num("panelPrice");
+  const ic=num("invCap"),iq=num("invQty"),ip=num("invPrice");
+  const bc=num("battCap"),bq=num("battQty"),bp=num("battPrice");
+  // Major equipment is only listed once a name or price has been entered
+  const eq=[
+    {on:val("panelName").trim()||pp, d:val("panelName").trim()||"Solar panels",cap:pc?pc+" W":"—",qty:pq,price:pp},
+    {on:val("invName").trim()||ip, d:val("invName").trim()||"Inverter",cap:ic?ic+" kVA":"—",qty:iq,price:ip},
+    {on:val("battName").trim()||bp, d:val("battName").trim()||"Battery",cap:bc?bc+" kWh":"—",qty:bq,price:bp},
+  ].filter(e=>e.on);
+  eq.forEach(e=>lines.push({d:e.d,cap:e.cap,qty:e.qty,price:e.price}));
   addItems.forEach(it=>{
     if(!(it.desc||"").trim()) return;
     const lot=isLotQty(it.qty);
-    lines.push({d:it.desc,qty:lot?"Lot":(parseFloat(it.qty)||0),price:it.price||0,lot});
+    lines.push({d:it.desc,cap:"—",qty:lot?"Lot":(parseFloat(it.qty)||0),price:it.price||0,lot});
   });
   let body="", total=0;
   lines.forEach(l=>{
     const amt=l.lot?(l.price||0):(l.qty||0)*(l.price||0);
     total+=amt;
-    body+=`<tr><td><span class="d">${esc(l.d)}</span></td><td>${l.qty||0}</td><td>${l.price?ngn.format(l.price):"—"}</td><td>${amt?ngn.format(amt):"—"}</td></tr>`;
+    body+=`<tr><td><span class="d">${esc(l.d)}</span></td><td>${l.cap}</td><td>${l.qty||0}</td><td>${l.price?ngn.format(l.price):"—"}</td><td>${amt?ngn.format(amt):"—"}</td></tr>`;
   });
   $("im_items").innerHTML=body;
   grandTotal=total;
   $("totalDisplay").textContent=ngn.format(total);
   $("im_total").textContent=ngn.format(total);
+  $("im_sysBox").style.visibility=eq.length?"":"hidden";
+  $("im_array").textContent=(Math.round(pc*pq/1000*100)/100)+" kWp";
+  $("im_invcap").textContent=(Math.round(ic*iq*100)/100)+" kVA";
+  $("im_battcap").textContent=(Math.round(bc*bq*100)/100)+" kWh";
 
   $("im_no").innerHTML="<b>No:</b> "+(val("invNo")||"—");
   $("im_date").innerHTML="<b>Date:</b> "+(fmtDate(val("invDate"))||"—");
