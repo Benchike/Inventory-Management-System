@@ -134,6 +134,10 @@ alter table public.invoices add column if not exists batt_price     numeric defa
 alter table public.invoices add column if not exists panel_name     text default '';
 alter table public.invoices add column if not exists inv_name       text default '';
 alter table public.invoices add column if not exists batt_name      text default '';
+alter table public.invoices add column if not exists template text default 'standard';
+alter table public.invoices add column if not exists audit jsonb not null default '[]'::jsonb;
+alter table public.invoices add column if not exists diagram text default '';
+alter table public.invoices add column if not exists terms text default '';
 
 create index if not exists invoices_status_idx on public.invoices (status, created_at desc);
 
