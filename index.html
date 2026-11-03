@@ -406,6 +406,22 @@ async function updateMRODB(d){
   if(error){toast("Update failed: "+error.message);return false;}
   await pull(); return true;
 }
+/* Items typed by name on a PO that are not yet in the catalogue are created automatically (qty 0 until the PO is received). */
+async function createMissingPOItems(lines){
+  const made={}, key=n=>n.trim().toLowerCase();
+  for(const l of lines){
+    if(l.itemId||l.packageId) continue;
+    const name=(l.newName||"").trim(); if(!name) continue;
+    const ex=DB.items.find(x=>key(x.name||"")===key(name));
+    if(ex){ l.itemId=ex.id; delete l.newName; continue; }
+    if(made[key(name)]){ l.itemId=made[key(name)]; delete l.newName; continue; }
+    const {data,error}=await SB.from(tbl("items")).insert({name,sku:"",category:"Other",unit:"Unit",qty:0,cost:l.cost||0,reorder:0}).select("id").single();
+    if(error){toast("Could not add \""+name+"\" to inventory: "+error.message);return false;}
+    made[key(name)]=data.id; l.itemId=data.id; delete l.newName;
+  }
+  if(Object.keys(made).length){ await pull(); toast(Object.keys(made).length+" new item(s) added to inventory"); }
+  return true;
+}
 async function updatePODB(d){
   const row={doc_date:d.date,note:d.note||"",lines:d.lines,
     supplier:d.supplier||"",
@@ -977,10 +993,11 @@ function bosForm(){
 function lineEditor(kind){
   const showCost=kind==="po", cls=showCost?"cols-po":"cols-mro";
   const header=showCost
-    ? `<span>Item</span><span>Qty</span><span>Unit cost (₦)</span><span></span>`
+    ? `<span>Item <small style="font-weight:500;color:var(--muted)">(new names are added to inventory)</small></span><span>Qty</span><span>Unit cost (₦)</span><span></span>`
     : `<span>Item</span><span>Qty</span><span>Available</span><span>Unit cost (₦)</span><span></span>`;
   return `<div class="linehead ${cls}">${header}</div>
     <div id="lineRows"></div>
+    ${showCost?`<datalist id="itemDL">${DB.items.map(i=>`<option value="${esc(i.name)}">${i.sku?esc(i.sku):''}</option>`).join("")}</datalist>`:''}
     <button class="btn ghost sm" id="addLine" style="width:100%;border-style:dashed;margin-top:3px">+ Add line</button>`;
 }
 function pkgById(id){return DB.bosPackages.find(p=>p.id===id);}
@@ -1009,8 +1026,11 @@ function renderLines(kind){
       const it=itemById(l.itemId);
       const avail=it?`${n2(it.qty)} ${esc(it.unit||"")}`:"—";
       const unitCost=it?ngn.format(it.cost||0):"—";
-      r.innerHTML=`<select data-i="${idx}" data-f="itemId"><option value="">— select item —</option>
-          ${DB.items.map(i=>`<option value="${i.id}" ${i.id===l.itemId?'selected':''}>${esc(i.name)}${i.sku?' ('+esc(i.sku)+')':''}</option>`).join("")}</select>
+      const itemField = showCost
+        ? `<input data-i="${idx}" data-f="itemName" list="itemDL" autocomplete="off" placeholder="Type a new item or pick from inventory" value="${esc(it?it.name:(l.newName||""))}">`
+        : `<select data-i="${idx}" data-f="itemId"><option value="">— select item —</option>
+          ${DB.items.map(i=>`<option value="${i.id}" ${i.id===l.itemId?'selected':''}>${esc(i.name)}${i.sku?' ('+esc(i.sku)+')':''}</option>`).join("")}</select>`;
+      r.innerHTML=`${itemField}
         <input class="num" type="number" data-i="${idx}" data-f="qty" value="${l.qty}">
         ${showCost?`<input class="num" type="text" inputmode="numeric" data-i="${idx}" data-f="cost" value="${Number(l.cost||0).toLocaleString('en-US')}">`
                   :`<div style="font-size:.78rem;font-weight:700;text-align:center;color:${it&&(it.qty||0)<(l.qty||0)?'var(--red)':'var(--muted)'}">${avail}</div>
@@ -1023,6 +1043,13 @@ function renderLines(kind){
     const i=+e.target.dataset.i,f=e.target.dataset.f;
     if(f==="cost"){fmtCommasEl(e.target);draft.lines[i].cost=parseFloat(e.target.value.replace(/,/g,""))||0; updateDocTotal(kind);}
     else if(f==="qty"){draft.lines[i].qty=parseFloat(e.target.value)||0; updateDocTotal(kind);}
+    else if(f==="itemName"){
+      const v=e.target.value.trim(), ln=draft.lines[i];
+      const m=DB.items.find(x=>(x.name||"").trim().toLowerCase()===v.toLowerCase());
+      if(m){ ln.itemId=m.id; ln.newName=""; if(!ln.cost){ ln.cost=m.cost||0; const ci=e.target.parentElement.querySelector('[data-f="cost"]'); if(ci)ci.value=Number(ln.cost).toLocaleString('en-US'); } }
+      else { ln.itemId=""; ln.newName=v; }
+      updateDocTotal(kind);
+    }
     else{ draft.lines[i].itemId=e.target.value; const it=itemById(e.target.value); if(it&&!draft.lines[i].cost)draft.lines[i].cost=it.cost||0; renderLines(kind); updateDocTotal(kind); }
   }));
   c.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{draft.lines.splice(+b.dataset.del,1);renderLines(kind);updateDocTotal(kind);}));
@@ -1285,10 +1312,11 @@ function poForm(){
   });
   $("d_cancel").addEventListener("click",()=>{draft=null;viewPO();});
   $("d_save").addEventListener("click",async()=>{
-    const lines=draft.lines.filter(l=>(l.itemId||l.packageId)&&(l.qty||0)>0);
+    const lines=draft.lines.filter(l=>(l.itemId||l.packageId||(l.newName||"").trim())&&(l.qty||0)>0);
     if(!lines.length){toast("Add at least one item line");return;}
     if(!draft.supplier.trim()){toast("Enter the supplier");return;}
     if(!draft.approvedBy.trim()){toast("Approver name is required");return;}
+    if(!(await createMissingPOItems(lines))) return;
     draft.lines=lines;
     draft.logistics=(draft.logistics||[]).filter(x=>(x.desc||"").trim()||(Number(x.amount)||0)>0)
       .map(x=>({desc:(x.desc||"").trim()||"Logistics",amount:Number(x.amount)||0}));
