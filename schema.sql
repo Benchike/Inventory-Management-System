@@ -111,8 +111,8 @@ create table if not exists public.invoices (
   bank_name       text default 'Wema Bank',
   account_name    text default 'Kiru Energy Ltd',
   account_number  text default '127429081',
-  sign_name       text default 'Chidi Okoronkwo',
-  sign_title      text default 'Head of Sales',
+  sign_name       text default 'Benedict Okpala',
+  sign_title      text default 'CEO',
   signature       text default '',
   status        text not null default 'draft' check (status in ('draft','issued')),
   issued_at     timestamptz,
@@ -125,8 +125,8 @@ create table if not exists public.invoices (
 alter table public.invoices add column if not exists bank_name      text default 'Wema Bank';
 alter table public.invoices add column if not exists account_name   text default 'Kiru Energy Ltd';
 alter table public.invoices add column if not exists account_number text default '127429081';
-alter table public.invoices add column if not exists sign_name      text default 'Chidi Okoronkwo';
-alter table public.invoices add column if not exists sign_title     text default 'Head of Sales';
+alter table public.invoices add column if not exists sign_name      text default 'Benedict Okpala';
+alter table public.invoices add column if not exists sign_title     text default 'CEO';
 alter table public.invoices add column if not exists signature      text default '';
 alter table public.invoices add column if not exists panel_price    numeric default 0;
 alter table public.invoices add column if not exists inv_price      numeric default 0;
