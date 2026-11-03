@@ -3,6 +3,8 @@
    last-activity time lives in localStorage (same origin as the Supabase session). */
 (function(){
   var LIMIT = 15*60*1000;
+  // MASTER SWITCH: auto sign-out is currently OFF. Set to true to turn it back on.
+  var ENABLED = false;
   var KEY = "kiru_last_activity";
   var NOTE = "kiru_idle_signed_out";
 
@@ -34,6 +36,7 @@
   }
 
   function check(){
+    if(!ENABLED) return;
     if(!hasSession()) return;
     var l=last();
     if(!l){ touch(); return; }            // session without a stamp: start counting now
