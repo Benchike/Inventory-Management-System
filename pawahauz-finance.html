@@ -119,7 +119,19 @@ window.KIRU_CONFIG = {
   .chartbox svg{width:100%;height:auto;display:block}
   .legend{display:flex;gap:16px;font-size:.7rem;font-weight:600;color:var(--muted);margin-top:6px;flex-wrap:wrap}
   .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
-  .res-sec{margin-bottom:16px}
+  .res-sec{margin-bottom:14px}
+  details.dd>summary{cursor:pointer;font-weight:800;font-size:.9rem;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  details.dd>summary::-webkit-details-marker{display:none}
+  details.dd>summary::after{content:"+";font-size:1.2rem;color:var(--blue-deep);font-weight:700}
+  details.dd[open]>summary::after{content:"\2013"}
+  details.dd>summary small{font-weight:500;color:var(--muted);font-size:.72rem;margin-right:auto;margin-left:8px}
+  details.dd[open]>summary{margin-bottom:12px}
+  details.sec>summary{cursor:pointer;list-style:none;font-weight:800;font-size:.72rem;text-transform:uppercase;letter-spacing:.13em;color:var(--blue-deep);display:flex;align-items:center;justify-content:space-between}
+  details.sec>summary::-webkit-details-marker{display:none}
+  details.sec>summary::after{content:"+";font-size:1.1rem}
+  details.sec[open]>summary::after{content:"\2013"}
+  details.sec[open]>summary{margin-bottom:11px}
+  .advlabel{padding:12px 16px 4px;font-size:.68rem;color:var(--muted);font-weight:600;border-top:1px solid var(--line)}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--navy);color:#fff;font-size:.82rem;font-weight:600;padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:50}
   .toast.show{opacity:1}
   @media print{
@@ -298,28 +310,18 @@ let S=DEFAULTS(), curId=null, scenarios=[], SB=null, synced=false, userEmail="";
 const DRAFT_KEY="kiru_pwf_draft", LS_KEY="kiru_pwf_scenarios";
 
 const SECTIONS=[
-  {t:"System & demand",f:[
-    ["units","Apartments connected","",1],["kwhDay","Avg consumption / apartment","kWh/day",.1],
-    ["kwp","Solar array","kWp",.1],["psh","Peak sun hours","h/day",.1],
-    ["pr","Performance ratio","%",1],["usable","Usable output after storage & inverter losses","%",1],
-    ["degr","System output degradation","%/yr",.1],["life","Project life","years",1]]},
-  {t:"Resident uptake",f:[["uptake1","Apartments buying power in year 1","% of apartments",1],["rampYears","Years to reach 100% uptake","years",1]],
-   h:"0 years = uptake stays at the year-1 level."},
-  {t:"Tariff & revenue",f:[
-    ["tariff","Energy tariff (year 1)","₦/kWh",1],["tariffEsc","Tariff escalation","%/yr",.1],
-    ["fixedMonthly","Fixed monthly charge / apartment","₦/month",1,"money"],["connFee","One-off connection fee / apartment","₦",1,"money"],
-    ["collection","Collection rate (bills actually paid)","%",1],["feePct","Payment / billing fees","% of revenue",.1]]},
-  {t:"CAPEX",table:"capex",label:"One-off cost to build the system. Tick “× apts” to multiply by the number of apartments."},
-  {t:"OPEX (annual, today's prices)",table:"opex",label:"Yearly running costs. Tick “× apts” for costs that scale with apartments.",
-   f:[["opexEsc","OPEX inflation","%/yr",.1]]},
-  {t:"Replacements & end of life",table:"repl",label:"Major component replacements (cost in today's prices, spent in the year given).",
-   f:[["replInfl","Replacement price change","%/yr",.1],["residual","Residual value at end of life","% of CAPEX",1]]},
-  {t:"Financing & tax",f:[
-    ["discount","Discount rate / hurdle rate","%",.1],["deprYears","Depreciation period","years",1],
-    ["debtPct","Debt share of CAPEX","%",1],["rate","Loan interest rate","%",.1],
-    ["tenor","Loan tenor","years",1],["tax","Company tax rate","%",1]],
-   h:"Debt is repaid in equal annual instalments. Tax is charged on profit after depreciation (and interest for equity returns); losses are not carried forward."},
-  {t:"Benchmarks",f:[["currentCost","What residents pay today (generator + grid)","₦/kWh",1],["targetPayback","Target payback period","years",.5]]}
+  {t:"System",f:[["units","Apartments connected","",1],["kwhDay","Avg consumption / apartment","kWh/day",.1],["kwp","Solar array","kWp",.1]]},
+  {t:"Tariff & uptake",f:[["tariff","Energy tariff","₦/kWh",1],["uptake1","Apartments signed up in year 1","%",1]],
+   h:"Uptake = the share of apartments that actually buy power from you. The rest join over time (see Growth &amp; revenue below)."},
+  {t:"CAPEX",table:"capex",label:"One-off cost to build the system. Tick “× apts” to multiply a row by the number of apartments."},
+  {t:"OPEX (per year)",table:"opex",label:"Yearly running costs in today's prices. Tick “× apts” for costs that scale with apartments."},
+  {adv:1,k:"tech",t:"Technical assumptions",f:[["psh","Peak sun hours","h/day",.1],["pr","Performance ratio","%",1],["usable","Usable output after losses","%",1],["degr","Output degradation","%/yr",.1],["life","Project life","years",1]]},
+  {adv:1,k:"growth",t:"Growth & revenue",f:[["rampYears","Years until all apartments have signed up","years",1],["tariffEsc","Tariff increase","%/yr",.1],["opexEsc","OPEX inflation","%/yr",.1],
+    ["collection","Bills actually paid","%",1],["feePct","Payment / billing fees","% of revenue",.1],["fixedMonthly","Fixed monthly charge / apartment","₦",1,"money"],["connFee","Connection fee / apartment","₦",1,"money"]]},
+  {adv:1,k:"repl",t:"Replacements & end of life",table:"repl",label:"Major replacements (today's prices) in the year you choose.",f:[["replInfl","Replacement price change","%/yr",.1],["residual","Residual value at end of life","% of CAPEX",1]]},
+  {adv:1,k:"fin",t:"Financing & tax",f:[["discount","Discount / hurdle rate","%",.1],["deprYears","Depreciation period","years",1],["debtPct","Debt share of CAPEX","%",1],["rate","Loan interest rate","%",.1],["tenor","Loan tenor","years",1],["tax","Company tax rate","%",1]],
+   h:"Loan repaid in equal yearly instalments. Tax is on profit after depreciation; losses are not carried forward."},
+  {adv:1,k:"bench",t:"Targets & benchmarks",f:[["currentCost","Residents pay today","₦/kWh",1],["targetPayback","Target payback","years",.5]]}
 ];
 let secN=0;
 function fieldHTML(f){
@@ -340,15 +342,21 @@ function tableHTML(key){
     +`<button class="addbtn" data-add="${key}">+ Add row</button>
       <div class="subtotal"><span>Total${isR?" (today's prices)":""}</span><span data-sub="${key}"></span></div>`;
 }
+const OPEN={};
+document.addEventListener("toggle",e=>{ const d=e.target; if(d.dataset&&d.dataset.d)OPEN[d.dataset.d]=d.open; },true);
 function renderInputs(){
-  secN=0;
+  secN=0; let advShown=false;
   $("inputs").innerHTML=SECTIONS.map(s=>{
-    secN++;
-    return `<div class="sec"><h2><span class="n">${secN}</span>${s.t}</h2>
-      ${s.label?`<div class="hint mb">${s.label}</div>`:""}
+    const body=`${s.label?`<div class="hint mb">${s.label}</div>`:""}
       ${s.table?`<div id="tbl_${s.table}">${tableHTML(s.table)}</div>`:""}
       ${s.f?`<div class="grid2" style="${s.table?"margin-top:12px":""}">${s.f.map(fieldHTML).join("")}</div>`:""}
-      ${s.h?`<div class="hint" style="margin-top:8px">${s.h}</div>`:""}</div>`;
+      ${s.h?`<div class="hint" style="margin-top:8px">${s.h}</div>`:""}`;
+    if(s.adv){
+      const lab=advShown?"":`<div class="advlabel">Advanced assumptions — sensible defaults are already set</div>`; advShown=true;
+      return lab+`<details class="sec" data-d="in_${s.k}" ${OPEN["in_"+s.k]?"open":""}><summary>${s.t}</summary>${body}</details>`;
+    }
+    secN++;
+    return `<div class="sec"><h2><span class="n">${secN}</span>${s.t}</h2>${body}</div>`;
   }).join("");
   $("scName").value=S.name;
   updateSubtotals();
@@ -399,7 +407,8 @@ function notes(){
     out.push([sv>=0.1?"good":(sv>=0?"warn":"bad"), sv>=0?`Residents save about <b>${nf(sv*100,0)}%</b> versus their current ${naira(cc)}/kWh.`:`The tariff is <b>${nf(-sv*100,0)}% above</b> what residents pay today (${naira(cc)}/kWh) — expect resistance to uptake.`]); }
   if(r.minDscr!=null&&r.minDscr<1.2) out.push(["warn",`Debt service is tight: the lowest debt service cover ratio is <b>${nf(r.minDscr,2)}×</b> (lenders usually want 1.2× or more).`]);
   if(r.payback==null) out.push(["bad",`The investment is not paid back within the ${r.N}-year project life.`]);
-  return out.map(([c,t])=>`<div class="note ${c}">${t}</div>`).join("");
+  const rank={bad:0,warn:1,good:2}; out.sort((a,b)=>rank[a[0]]-rank[b[0]]);
+  return out.slice(0,3).map(([c,t])=>`<div class="note ${c}">${t}</div>`).join("");
 }
 function chartSVG(){
   const r=RES,W=760,H=270,m={l:62,r:14,t:14,b:30},n=r.cum.length;
@@ -444,28 +453,32 @@ function render(){
   const r=RES,Y1=r.Y[0],d=(+S.discount||0)/100;
   const bill=(+S.kwhDay||0)*30*(+S.tariff||0)+(+S.fixedMonthly||0);
   const capexSplit=S.capex.filter(c=>N0(c.a)>0).map(c=>({n:c.n||"Item",v:N0(c.a)*(c.u?r.U:1)})).sort((a,b)=>b.v-a.v);
+  const dd=(k,title,sub,body,extra="")=>`<details class="card pad res-sec dd ${extra}" data-d="r_${k}" ${OPEN["r_"+k]?"open":""}><summary>${title}<small>${sub}</small></summary>${body}</details>`;
+  const more="<div class='kpis' style='margin-bottom:0'>"+
+      kpi("Tariff for "+nf(S.targetPayback,1)+"-yr payback",r.tp==null?"n/a":naira(r.tp)+"/kWh","")+
+      kpi("Project NPV",compact(r.npv),"at "+nf(S.discount,1)+"%",cls(r.npv>=0))+
+      kpi("Year-1 revenue",compact(Y1.rev),`${nf(Y1.sold)} kWh sold`)+
+      kpi("Year-1 EBITDA",compact(Y1.ebitda),pct(Y1.rev?Y1.ebitda/Y1.rev:0,0)+" margin",cls(Y1.ebitda>0))+
+      kpi("Avg resident bill",naira(bill)+"/mo",`${nf(S.kwhDay,1)} kWh/day`)+
+      kpi("Discounted payback",r.dpayback==null?"Never":yrs(r.dpayback),"")+
+      ((+S.debtPct>0)?kpi("Equity IRR",pct(r.irrEq),"after debt service",cls(r.irrEq!=null&&r.irrEq>=d,r.irrEq!=null))+kpi("Min. debt cover",r.minDscr==null?"—":nf(r.minDscr,2)+"×","1.2× or more is comfortable",cls(r.minDscr!=null&&r.minDscr>=1.2,r.minDscr!=null&&r.minDscr>=1)):"")+
+      "</div>";
+  const split=capexSplit.map(c=>{const p=r.capex0?c.v/r.capex0:0;return `<div style="display:grid;grid-template-columns:minmax(120px,260px) 1fr 120px;gap:10px;align-items:center;font-size:.76rem;margin-bottom:5px"><span style="font-weight:600">${esc(c.n)}</span><div style="background:var(--soft);border-radius:5px;height:10px"><div style="width:${(p*100).toFixed(1)}%;height:10px;border-radius:5px;background:var(--blue)"></div></div><span style="text-align:right;font-variant-numeric:tabular-nums">${compact(c.v)} · ${nf(p*100,0)}%</span></div>`;}).join("");
   $("results").innerHTML=`
     <div class="kpis res-sec">
       ${kpi("Total CAPEX",compact(r.capex0),`${compact(r.U?r.capex0/r.U:0)} per apartment`,"",1)}
-      ${kpi("LCOE",r.lcoe==null?"—":naira(r.lcoe)+"/kWh","cost to produce &amp; deliver 1 kWh (at "+nf(S.discount,1)+"%)","",1)}
-      ${kpi("Break-even tariff",r.be==null?"n/a":naira(r.be)+"/kWh","NPV = 0 at the "+nf(S.discount,1)+"% hurdle",cls(r.be!=null&&(+S.tariff||0)>=r.be),1)}
-      ${kpi("Tariff for "+nf(S.targetPayback,1)+"-yr payback",r.tp==null?"n/a":naira(r.tp)+"/kWh","needed to recover CAPEX by target","",1)}
-      ${kpi("Simple payback",r.payback==null?"Never":yrs(r.payback),"discounted: "+(r.dpayback==null?"never":yrs(r.dpayback)),cls(r.payback!=null&&r.payback<=(+S.targetPayback||5),r.payback!=null))}
-      ${kpi("Project IRR",pct(r.irr),"hurdle "+nf(S.discount,1)+"%",cls(r.irr!=null&&r.irr>=d,r.irr!=null))}
-      ${kpi("Project NPV",compact(r.npv),"at "+nf(S.discount,1)+"%",cls(r.npv>=0))}
-      ${(+S.debtPct>0)?kpi("Equity IRR",pct(r.irrEq),"after debt service",cls(r.irrEq!=null&&r.irrEq>=d,r.irrEq!=null))+kpi("Min. debt cover (DSCR)",r.minDscr==null?"—":nf(r.minDscr,2)+"×","≥ 1.2× is comfortable",cls(r.minDscr!=null&&r.minDscr>=1.2,r.minDscr!=null&&r.minDscr>=1)):""}
-      ${kpi("Year-1 revenue",compact(Y1.rev),`${nf(Y1.sold)} kWh sold`)}
-      ${kpi("Year-1 EBITDA",compact(Y1.ebitda),pct(Y1.rev?Y1.ebitda/Y1.rev:0,0)+" margin",cls(Y1.ebitda>0))}
-      ${kpi("Avg resident bill",naira(bill)+"/mo",`${nf(S.kwhDay,1)} kWh/day at ${naira(S.tariff)}/kWh`)}
-      ${kpi("Lifetime EBITDA",compact(r.totalEbitda),`over ${r.N} years`)}
+      ${kpi("LCOE",r.lcoe==null?"—":naira(r.lcoe)+"/kWh","cost to produce 1 kWh","",1)}
+      ${kpi("Break-even tariff",r.be==null?"n/a":naira(r.be)+"/kWh","lowest tariff that meets the "+nf(S.discount,1)+"% hurdle",cls(r.be!=null&&(+S.tariff||0)>=r.be),1)}
+      ${kpi("Payback",r.payback==null?"Never":yrs(r.payback),"target "+nf(S.targetPayback,1)+" yrs",cls(r.payback!=null&&r.payback<=(+S.targetPayback||5),r.payback!=null),1)}
+      ${kpi("Project IRR",pct(r.irr),"hurdle "+nf(S.discount,1)+"%",cls(r.irr!=null&&r.irr>=d,r.irr!=null),1)}
     </div>
     <div class="notes res-sec">${notes()}</div>
-    <div class="card pad res-sec"><h3>Cumulative cash flow</h3><div class="hint mb">When the project earns back its CAPEX.</div><div class="chartbox">${chartSVG()}</div></div>
-    <div class="card pad res-sec"><h3>CAPEX breakdown</h3><div class="hint mb">Largest items first.</div>
-      ${capexSplit.map(c=>{const p=r.capex0?c.v/r.capex0:0;return `<div style="display:grid;grid-template-columns:minmax(120px,260px) 1fr 120px;gap:10px;align-items:center;font-size:.76rem;margin-bottom:5px"><span style="font-weight:600">${esc(c.n)}</span><div style="background:var(--soft);border-radius:5px;height:10px"><div style="width:${(p*100).toFixed(1)}%;height:10px;border-radius:5px;background:var(--blue)"></div></div><span style="text-align:right;font-variant-numeric:tabular-nums">${compact(c.v)} · ${nf(p*100,0)}%</span></div>`;}).join("")}</div>
-    <div class="card pad res-sec"><h3>Sensitivity — what if CAPEX or the tariff changes?</h3><div class="hint mb">Each cell re-runs the whole model. The outlined cell is your current scenario.</div>${sensitivity()}</div>
-    <div class="card pad res-sec"><h3>Year-by-year cash flow</h3><div class="hint mb">Naira, nominal. Years where solar supply caps sales are marked ●.</div>${cashTable()}</div>
-    <div class="card pad res-sec noprint" id="compareBox"></div>`;
+    <div class="card pad res-sec"><h3>When do we earn back the CAPEX?</h3><div class="chartbox">${chartSVG()}</div></div>
+    ${dd("more","More metrics","",more)}
+    ${dd("capex","CAPEX breakdown","largest items first",split)}
+    ${dd("sens","What if CAPEX or the tariff changes?","sensitivity",sensitivity())}
+    ${dd("cash","Year-by-year cash flow","table · ● = solar supply caps sales",cashTable())}
+    ${dd("cmp","Compare saved scenarios","",'<div id="compareBox"></div>',"noprint")}`;
   markConstrained(); renderCompare();
 }
 function markConstrained(){ /* constrained years are flagged in the column header */
@@ -514,6 +527,7 @@ $("scDel").addEventListener("click",async()=>{
   curId=null; await loadScenarios(); renderCompare(); toast("Scenario deleted");
 });
 $("scPrint").addEventListener("click",()=>window.print());
+window.addEventListener("beforeprint",()=>document.querySelectorAll("#results details").forEach(d=>d.open=true));
 $("scCsv").addEventListener("click",()=>{
   const r=RES, cols=["Year","Apartments on supply","Generation kWh","Energy sold kWh","Revenue","Fees","OPEX","EBITDA","Tax","Replacements","Project cash flow","Debt service","Equity cash flow","Cumulative project cash"];
   const lines=[cols.join(","),["0","","","",0,0,0,0,0,0,Math.round(r.cf[0]),0,Math.round(r.cfEq[0]),Math.round(r.cum[0])].join(",")];
@@ -522,10 +536,10 @@ $("scCsv").addEventListener("click",()=>{
 });
 function renderCompare(){
   const box=$("compareBox"); if(!box)return;
-  if(!scenarios.length){ box.innerHTML='<h3>Compare saved scenarios</h3><div class="hint">Save two or more scenarios (for example different building sizes or tariffs) and they will be compared here side by side.</div>'; return; }
+  if(!scenarios.length){ box.innerHTML='<div class="hint">Save two or more scenarios (for example different building sizes or tariffs) and they will be compared here side by side.</div>'; return; }
   const rows=scenarios.map(s=>{ const inp=normalise(s.inputs); const r=run(inp), be=breakEvenTariff(inp);
     return `<tr${s.id===curId?' style="background:var(--tag-bg)"':""}><td>${esc(s.name)}</td><td>${nf(inp.units)}</td><td>${compact(r.capex0)}</td><td>${naira(inp.tariff)}</td><td>${r.lcoe==null?"—":naira(r.lcoe)}</td><td>${be==null?"n/a":naira(be)}</td><td>${r.payback==null?"Never":nf(r.payback,1)+" yrs"}</td><td>${pct(r.irr)}</td><td>${compact(r.npv)}</td></tr>`; }).join("");
-  box.innerHTML=`<h3>Compare saved scenarios</h3><div class="hint mb">All saved scenarios, recalculated. The one you are editing is highlighted.</div>
+  box.innerHTML=`<div class="hint mb">All saved scenarios, recalculated. The one you are editing is highlighted.</div>
     <div class="tblwrap"><table class="t"><thead><tr><th>Scenario</th><th>Apts</th><th>CAPEX</th><th>Tariff/kWh</th><th>LCOE/kWh</th><th>Break-even tariff</th><th>Payback</th><th>IRR</th><th>NPV</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
