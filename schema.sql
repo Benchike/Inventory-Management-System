@@ -218,6 +218,9 @@ alter table public.receipts add column if not exists balance_due_date    date;
 alter table public.receipts add column if not exists balance_due_date_to date;
 alter table public.receipts add column if not exists payment_terms       text default '';
 
+-- Editable Terms & Conditions (NULL = default terms, '' = hidden)
+alter table public.receipts add column if not exists terms_conditions text;
+
 create index if not exists receipts_created_idx on public.receipts (created_at desc);
 
 create table if not exists public.receipt_counters (
