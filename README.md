@@ -60,6 +60,22 @@ so they can sign in immediately. Anyone without an account cannot see the data.
 
 To add someone later, repeat this step — no redeployment needed.
 
+### Self sign-up with email verification
+
+Team members can also create their own account from the **Create account** tab
+(@ourkiru.com email + team access code). To make them verify their email first:
+
+1. Supabase → **Authentication** → **Sign In / Providers** → **Email** → switch **Confirm email** on.
+2. Supabase → **Authentication** → **URL Configuration** → set **Site URL** to the app's Vercel
+   address and add the same address under **Redirect URLs**, so the link in the email opens the app.
+3. Optional, to let people type a code instead of clicking the link: **Authentication** →
+   **Emails** → **Confirm signup** template → add a line such as `Your code is {{ .Token }}`.
+4. Supabase's built-in email sender is for testing only (a few emails per hour, and only to
+   members of your Supabase organisation). For real use, add your own sender under
+   **Authentication** → **Emails** → **SMTP Settings**.
+
+While **Confirm email** is off, new accounts are signed in straight away without verification.
+
 ## Step 5 — Deploy to Vercel
 
 **Easiest route (drag and drop):**

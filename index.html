@@ -257,6 +257,19 @@ window.KIRU_CONFIG = {
       <div class="mb"><span class="lab">Team access code</span><input type="text" id="su_code" autocomplete="off" placeholder="Ask your manager"></div>
       <button class="btn" id="g_up" style="width:100%">Create account</button>
     </div>
+    <!-- email verification panel -->
+    <div id="panel_verify" style="display:none">
+      <div style="font-size:.84rem;line-height:1.55;margin-bottom:14px;text-align:center">
+        We sent a verification email to<br><b id="vf_email" style="word-break:break-all"></b><br>
+        <span style="color:var(--muted);font-size:.78rem">Click the link in that email, or enter the code from it below. Check your spam folder if you can't find it.</span>
+      </div>
+      <div class="mb"><span class="lab">Verification code</span><input type="text" id="vf_code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="e.g. 123456" style="text-align:center;font-size:1.15rem;font-weight:800;letter-spacing:.3em"></div>
+      <button class="btn" id="vf_go" style="width:100%">Verify email</button>
+      <div style="display:flex;justify-content:space-between;gap:10px;margin-top:12px;font-size:.78rem;font-weight:700">
+        <a href="#" id="vf_resend" style="color:var(--blue-deep);text-decoration:none">Resend email</a>
+        <a href="#" id="vf_back" style="color:var(--muted);text-decoration:none">Back to sign in</a>
+      </div>
+    </div>
     <div id="gateMsg" class="gatemsg"></div>
   </div>
 </div>
@@ -635,27 +648,93 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("su_pass2").addEventListener("keydown",e=>{if(e.key==="Enter")signUp();});
   $("su_code").addEventListener("keydown",e=>{if(e.key==="Enter")signUp();});
   $("signOut").addEventListener("click",async()=>{await SB.auth.signOut();location.reload();});
+  $("vf_go").addEventListener("click",verifyEmailCode);
+  $("vf_code").addEventListener("keydown",e=>{if(e.key==="Enter")verifyEmailCode();});
+  $("vf_code").addEventListener("input",e=>{e.target.value=e.target.value.replace(/\D/g,"");});
+  $("vf_resend").addEventListener("click",e=>{e.preventDefault();resendVerification();});
+  $("vf_back").addEventListener("click",e=>{e.preventDefault();gateTab("signin");});
+  showAuthLinkError();
   boot();
 });
+// message under the gate form: red for errors, green when ok=true
+function gateSay(msg,ok){ const m=$("gateMsg"); m.style.color=ok?"var(--green)":""; m.textContent=msg||""; }
+function isUnverifiedError(error){
+  return !!error && (error.code==="email_not_confirmed" || /email not confirmed/i.test(error.message||""));
+}
 async function signIn(){
   const email=$("g_email").value.trim(), pass=$("g_pass").value;
-  if(!email||!pass){$("gateMsg").textContent="Enter your email and password";return;}
-  $("gateMsg").textContent="Signing in…";
+  if(!email||!pass){gateSay("Enter your email and password");return;}
+  gateSay("Signing in…");
   const {data,error}=await SB.auth.signInWithPassword({email,password:pass});
-  if(error){$("gateMsg").textContent=error.message;return;}
-  $("gateMsg").textContent="";
+  if(isUnverifiedError(error)){
+    showVerify(email.toLowerCase());
+    gateSay("Your email is not verified yet. Use the email we sent you, or tap Resend email.");
+    return;
+  }
+  if(error){gateSay(error.message);return;}
+  gateSay("");
   await onSignedIn(data.user);
 }
 
 function gateTab(which){
   const isSignin=which==="signin";
+  $("panel_verify").style.display="none";
   $("panel_signin").style.display=isSignin?"":"none";
   $("panel_signup").style.display=isSignin?"none":"";
   $("tab_signin").style.background=isSignin?"var(--navy)":"var(--card-bg)";
   $("tab_signin").style.color=isSignin?"#fff":"var(--muted)";
   $("tab_signup").style.background=isSignin?"var(--card-bg)":"var(--navy)";
   $("tab_signup").style.color=isSignin?"var(--muted)":"#fff";
-  $("gateMsg").textContent="";
+  gateSay("");
+}
+
+/* ---- email verification ---- */
+let verifyEmail="", resendTimer=null;
+function authRedirectUrl(){ return location.origin+location.pathname; }
+function showVerify(email){
+  verifyEmail=email;
+  $("panel_signin").style.display="none";
+  $("panel_signup").style.display="none";
+  $("panel_verify").style.display="";
+  $("vf_email").textContent=email;
+  $("vf_code").value="";
+  gateSay("");
+  $("vf_code").focus();
+}
+async function verifyEmailCode(){
+  const token=$("vf_code").value.trim();
+  if(!/^\d{6,10}$/.test(token)){gateSay("Enter the verification code from the email");return;}
+  gateSay("Verifying…");
+  const {data,error}=await SB.auth.verifyOtp({email:verifyEmail,token,type:"signup"});
+  if(error){gateSay(/expired|invalid/i.test(error.message||"")?"That code is wrong or has expired. Tap Resend email for a new one.":error.message);return;}
+  gateSay("");
+  if(data&&data.session){ await onSignedIn(data.session.user); }
+  else { gateTab("signin"); $("g_email").value=verifyEmail; gateSay("Email verified. Please sign in.",true); }
+}
+function startResendCooldown(sec){
+  const a=$("vf_resend"); clearInterval(resendTimer);
+  let left=sec;
+  const tick=()=>{
+    if(left<=0){ clearInterval(resendTimer); a.textContent="Resend email"; a.style.pointerEvents=""; a.style.opacity=""; return; }
+    a.textContent="Resend in "+left+"s"; a.style.pointerEvents="none"; a.style.opacity=".5"; left--;
+  };
+  tick(); resendTimer=setInterval(tick,1000);
+}
+async function resendVerification(){
+  if(!verifyEmail) return;
+  gateSay("Sending…");
+  const {error}=await SB.auth.resend({type:"signup",email:verifyEmail,options:{emailRedirectTo:authRedirectUrl()}});
+  if(error){gateSay(error.message);return;}
+  gateSay("Verification email sent again.",true);
+  startResendCooldown(60);
+}
+// a verification link that is expired or already used comes back with an error in the URL
+function showAuthLinkError(){
+  const p=new URLSearchParams((location.hash||"").replace(/^#/,"")), q=new URLSearchParams(location.search);
+  const desc=p.get("error_description")||q.get("error_description");
+  if(!desc) return;
+  gateSay(desc.replace(/\+/g," ")+". Sign in to get a new verification email.");
+  history.replaceState(null,"",location.pathname);
 }
 
 async function signUp(){
@@ -668,22 +747,26 @@ async function signUp(){
   const code=$("su_code").value.trim();
   const tidy=s=>s.trim().replace(/\s+/g," ");
   const first=tidy($("su_first").value), last=tidy($("su_last").value);
-  if(!first||!last||!email||!pass||!pass2||!code){$("gateMsg").textContent="Please fill in all fields, including your first and last name";return;}
-  if(!email.endsWith("@"+allowedDomain)){$("gateMsg").textContent="Sign-up is restricted to @"+allowedDomain+" email addresses";return;}
-  if(pass.length<8){$("gateMsg").textContent="Password must be at least 8 characters";return;}
-  if(pass!==pass2){$("gateMsg").textContent="Passwords do not match";return;}
-  if(code!==correctCode){$("gateMsg").textContent="Team access code is incorrect";return;}
-  $("gateMsg").textContent="Creating account…";
-  const {data,error}=await SB.auth.signUp({email,password:pass,options:{data:{first_name:first,last_name:last,full_name:first+" "+last}}});
-  if(error){$("gateMsg").textContent=error.message;return;}
+  if(!first||!last||!email||!pass||!pass2||!code){gateSay("Please fill in all fields, including your first and last name");return;}
+  if(!email.endsWith("@"+allowedDomain)){gateSay("Sign-up is restricted to @"+allowedDomain+" email addresses");return;}
+  if(pass.length<8){gateSay("Password must be at least 8 characters");return;}
+  if(pass!==pass2){gateSay("Passwords do not match");return;}
+  if(code!==correctCode){gateSay("Team access code is incorrect");return;}
+  gateSay("Creating account…");
+  const {data,error}=await SB.auth.signUp({email,password:pass,options:{emailRedirectTo:authRedirectUrl(),data:{first_name:first,last_name:last,full_name:first+" "+last}}});
+  if(error){gateSay(error.message);return;}
   if(data.user&&data.session){
-    $("gateMsg").textContent="";
+    // email confirmation is switched off in Supabase — account is live immediately
+    gateSay("");
     await onSignedIn(data.user);
+  } else if(data.user&&Array.isArray(data.user.identities)&&data.user.identities.length===0){
+    // Supabase returns a placeholder user when the email is already registered
+    gateTab("signin"); $("g_email").value=email;
+    gateSay("An account with this email already exists. Sign in instead.");
   } else {
-    $("gateMsg").style.color="var(--green)";
-    $("gateMsg").textContent="Account created! Check your email to confirm, then sign in.";
-    gateTab("signin");
-    $("gateMsg").style.color="var(--green)";
+    showVerify(email);
+    gateSay("Account created. Verify your email to finish.",true);
+    startResendCooldown(60);
   }
 }
 
