@@ -156,9 +156,6 @@ window.KIRU_CONFIG = {
   table.items tr{break-inside:avoid;page-break-inside:avoid}
   .pv-terms .th{font-weight:800;font-size:12px;color:#021431;margin-bottom:4px}
   .pv-terms .tt{font-size:11px;color:#56657a;line-height:1.55;max-width:380px}
-  .pv-terms ol{margin:0;padding-left:18px;font-size:11px;color:#56657a;line-height:1.55}
-  .pv-terms ol li{margin-bottom:4px;padding-left:2px}
-  .pv-terms ol li b{color:#021431;font-weight:700}
   .pv-divider{height:3px;border-radius:3px;margin:16px 0 15px;background:linear-gradient(90deg,#00a4ff 0%,#00a4ff 5%,#dfe6ee 11%,#dfe6ee 89%,#00a4ff 95%,#00a4ff 100%)}
   .pv-contact{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
   .pv-contact .ci{display:flex;align-items:center;gap:9px;font-size:12px;color:#021431;font-weight:500;line-height:1.35}
@@ -273,13 +270,6 @@ window.KIRU_CONFIG = {
       </div>
 
       <div class="sec">
-        <h2>Terms &amp; Conditions</h2>
-        <span class="lab">Printed at the bottom of the receipt <small>(one term per line — text before the first colon is shown in bold; clear the box to hide the section)</small></span>
-        <textarea id="rcTerms" style="min-height:230px;font-size:.8rem;line-height:1.5"></textarea>
-        <button class="minibtn" id="resetTerms" type="button" style="margin-top:8px">Reset to default terms</button>
-      </div>
-
-      <div class="sec">
         <h2>Sign-off</h2>
         <div class="row2 mb"><div><span class="lab">Received by</span><input type="text" id="signName" value="Benedict Okpala"></div>
           <div><span class="lab">Title</span><input type="text" id="signTitle" value="Director"></div></div>
@@ -371,9 +361,9 @@ window.KIRU_CONFIG = {
           </div>
         </div>
 
-        <div class="pv-terms" id="pv_termsBlock">
-          <div class="th">Terms &amp; Conditions</div>
-          <ol id="pv_termsList"></ol>
+        <div class="pv-terms">
+          <div class="th">Note:</div>
+          <div class="tt">This receipt acknowledges the amount received above. Where a balance is shown, it remains payable per the agreed payment plan.</div>
         </div>
         <div class="pv-divider"></div>
         <div class="pv-contact">
@@ -422,21 +412,6 @@ function fmtCommasEl(el){
   try{el.setSelectionRange(pos,pos);}catch(e){}
 }
 const DEFAULT_TERMS="The customer agrees to pay the outstanding balance stated above within the period indicated. Where the customer violates this agreement, Kiru Energy Ltd reserves the right to recover the installed equipment, in addition to any other remedy available to it.";
-const DEFAULT_TC=[
-  "Payment: This receipt acknowledges the amount received. Any outstanding balance remains payable in accordance with the agreed payment plan.",
-  "Warranty Coverage: Kiru Energy directly provides warranty coverage only for its installation and workmanship services. All equipment warranties are provided by the respective manufacturers. Kiru Energy will facilitate applicable warranty claims on behalf of customers, subject to the manufacturers' terms and conditions.",
-  "Warranty Logistics Costs: Warranty claims do not cover transportation or logistics expenses. All costs associated with transporting equipment for warranty assessment, repair, or replacement shall be borne by the customer.",
-  "Unauthorised Third-Party Interference: Any unauthorised inspection, maintenance, repair, modification, or interference with the installed system by third-party technicians or solar companies may void Kiru Energy's applicable installation and workmanship warranty, subject to applicable law and warranty terms."
-].join("\n");
-function tcEsc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-function renderTerms(){
-  const lines=$("rcTerms").value.split(/\n+/).map(s=>s.trim().replace(/^\d+[.)]\s*/,"")).filter(Boolean);
-  $("pv_termsBlock").style.display=lines.length?"block":"none";
-  $("pv_termsList").innerHTML=lines.map(l=>{
-    const m=l.match(/^([^:]{1,60}):\s*(.*)$/);
-    return "<li>"+(m?"<b>"+tcEsc(m[1])+":</b> "+tcEsc(m[2]):tcEsc(l))+"</li>";
-  }).join("");
-}
 function genNo(){
   const d=new Date();
   const ymd=""+d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
@@ -592,8 +567,6 @@ function calc(){
     $("pv_agreement").style.display="none";
   }
 
-  renderTerms();
-
   $("pv_signName").firstChild.textContent=val("signName")||"—";
   $("pv_signRole").textContent=(val("signTitle")||"—")+" · Kiru Energy Ltd";
   const defaultSlot=document.querySelector(".pv-sig .slot");
@@ -620,8 +593,7 @@ function rowToReceipt(r){
     payMethod:r.pay_method||"Bank Transfer", payRef:r.pay_ref||"", amountPaid:r.amount_paid||0,
     signName:r.sign_name||"Benedict Okpala", signTitle:r.sign_title||"Director", signature:r.signature||"",
     receiptType:r.receipt_type||"full", balDueFrom:r.balance_due_date||"", balDueTo:r.balance_due_date_to||"",
-    balTerms:r.payment_terms||"",
-    rcTerms: r.terms_conditions==null ? DEFAULT_TC : r.terms_conditions};
+    balTerms:r.payment_terms||""};
 }
 function formToRow(){
   const paid=parseFloat((val("amtPaid")||"").replace(/,/g,""))||0;
@@ -631,8 +603,7 @@ function formToRow(){
     sign_name:val("signName"), sign_title:val("signTitle"), signature:customSig,
     receipt_type:val("rcType")||"full", balance_due_date:val("balDueFrom")||null,
     balance_due_date_to: $("balRangeChk").checked ? (val("balDueTo")||null) : null,
-    payment_terms:val("balTerms")||"",
-    terms_conditions:$("rcTerms").value};
+    payment_terms:val("balTerms")||""};
 }
 function loadReceiptIntoForm(rec){
   curId=rec._id;
@@ -655,28 +626,19 @@ function loadReceiptIntoForm(rec){
   $("balDueFrom").value=rec.balDueFrom||""; $("balDueTo").value=rec.balDueTo||"";
   $("balRangeChk").checked=!!rec.balDueTo;
   $("balTerms").value=rec.balTerms||DEFAULT_TERMS;
-  $("rcTerms").value = rec.rcTerms==null ? DEFAULT_TC : rec.rcTerms;
   renderItems(); calc();
-}
-let tcColumnMissing=false;
-async function writeReceiptRow(row){
-  if(curId) return await SB.from("receipts").update(row).eq("id",curId);
-  return await SB.from("receipts").insert(row).select("id").single();
 }
 async function saveReceipt(){
   if(!synced) return;
   const row=formToRow();
-  if(tcColumnMissing) delete row.terms_conditions;
-  let {data,error}=await writeReceiptRow(row);
-  // DB not migrated yet (add_receipt_terms_conditions.sql): save everything else
-  if(error && /terms_conditions/.test(error.message||"")){
-    tcColumnMissing=true;
-    delete row.terms_conditions;
-    ({data,error}=await writeReceiptRow(row));
-    if(!error) setSyncBanner("Receipt saved, but edited Terms & Conditions are not being stored yet — run add_receipt_terms_conditions.sql in Supabase.",false);
+  if(curId){
+    const {error}=await SB.from("receipts").update(row).eq("id",curId);
+    if(error){ console.error("save error",error); alert("Could not save receipt: "+error.message); return; }
+  } else {
+    const {data,error}=await SB.from("receipts").insert(row).select("id").single();
+    if(error){ console.error("insert error",error); alert("Could not save receipt: "+error.message); return; }
+    curId=data.id;
   }
-  if(error){ console.error("save error",error); alert("Could not save receipt: "+error.message); return; }
-  if(!curId && data) curId=data.id;
   await loadHistory();
 }
 function queueAutosave(){
@@ -771,7 +733,6 @@ async function newReceipt(){
   paidTouched=false; $("amtPaid").value="";
   $("rcType").value="full"; $("balDueFrom").value=""; $("balDueTo").value=""; $("balRangeChk").checked=false;
   $("balTerms").value=DEFAULT_TERMS;
-  $("rcTerms").value=DEFAULT_TC;
   renderItems(); calc();
 }
 async function genNoRemote(){
@@ -792,9 +753,7 @@ document.querySelectorAll(".vtab").forEach(b=>b.addEventListener("click",()=>set
 $("histSearch").addEventListener("input", applyHistSearch);
 
 $("newNo").addEventListener("click",async()=>{$("rcNo").value= synced ? await genNoRemote() : genNo(); calc(); queueAutosave();});
-["rcNo","rcDate","clientName","clientAddr","payMethod","payRef","signName","signTitle","rcType","balDueFrom","balDueTo","balRangeChk","balTerms","rcTerms"].forEach(id=>$(id).addEventListener("input",()=>{calc();queueAutosave();}));
-$("rcTerms").value=DEFAULT_TC;
-$("resetTerms").addEventListener("click",()=>{$("rcTerms").value=DEFAULT_TC; calc(); queueAutosave();});
+["rcNo","rcDate","clientName","clientAddr","payMethod","payRef","signName","signTitle","rcType","balDueFrom","balDueTo","balRangeChk","balTerms"].forEach(id=>$(id).addEventListener("input",()=>{calc();queueAutosave();}));
 $("amtPaid").addEventListener("input",e=>{paidTouched=true; fmtCommasEl(e.target); calc(); queueAutosave();});
 $("sysTotal").addEventListener("input",e=>{fmtCommasEl(e.target); calc(); queueAutosave();});
 renderItems(); calc();
