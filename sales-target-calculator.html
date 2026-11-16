@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/idle-timeout.js"></script>
+<script src="/lif-access.js"></script>
 <script src="/autosuggest.js" defer></script>
 <script>
 window.KIRU_CONFIG = {
@@ -444,6 +445,7 @@ async function initCloud(){
     if(!window.supabase||!window.KIRU_CONFIG) return;
     SB=window.supabase.createClient(window.KIRU_CONFIG.SUPABASE_URL,window.KIRU_CONFIG.SUPABASE_ANON_KEY);
     const {data:{session}}=await SB.auth.getSession();
+    if(session && window.KiruLif && !KiruLif.allowed(session.user.email)){ KiruLif.block(); return; }
     if(!session){ setStatus("Not signed in — saving in this browser only. Sign in at the main Kiru app, then reload.","warn"); return; }
     userEmail=(session.user&&session.user.email)||"";
     const {data,error}=await SB.from("sales_targets").select("*").order("updated_at",{ascending:false}).limit(1);

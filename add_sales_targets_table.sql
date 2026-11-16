@@ -16,4 +16,5 @@ create index if not exists sales_targets_updated_idx on public.sales_targets (up
 
 alter table public.sales_targets enable row level security;
 drop policy if exists sales_targets_rw on public.sales_targets;
-create policy sales_targets_rw on public.sales_targets for all to authenticated using (true) with check (true);
+-- restricted to the people in is_lif_member() (see add_restricted_tools_access.sql)
+create policy sales_targets_rw on public.sales_targets for all to authenticated using (public.is_lif_member()) with check (public.is_lif_member());

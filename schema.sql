@@ -9,7 +9,8 @@
 -- ============================================================
 
 -- ============================================================
--- LIF ACCESS — only the LIF team can read or change lif_* tables.
+-- RESTRICTED ACCESS — only these people can read or change the lif_* tables,
+-- the All On grant invoices and the sales targets.
 -- Keep this list in step with lif-access.js.
 -- ============================================================
 create or replace function public.is_lif_member()
@@ -1431,8 +1432,8 @@ alter table public.allon_invoices          enable row level security;
 alter table public.allon_invoice_counters  enable row level security;
 drop policy if exists allon_invoices_rw          on public.allon_invoices;
 drop policy if exists allon_invoice_counters_r   on public.allon_invoice_counters;
-create policy allon_invoices_rw          on public.allon_invoices          for all    to authenticated using (true) with check (true);
-create policy allon_invoice_counters_r   on public.allon_invoice_counters  for select to authenticated using (true);
+create policy allon_invoices_rw          on public.allon_invoices          for all    to authenticated using (public.is_lif_member()) with check (public.is_lif_member());
+create policy allon_invoice_counters_r   on public.allon_invoice_counters  for select to authenticated using (public.is_lif_member());
 
 alter table public.lif_phase1_installations add column if not exists gender text not null default '';
 
