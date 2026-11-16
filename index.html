@@ -212,6 +212,7 @@
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/idle-timeout.js"></script>
+<script src="/lif-access.js"></script>
 <script src="/autosuggest.js" defer></script>
 <script>
 /* ====== CONFIGURE ME ======
@@ -541,6 +542,7 @@ function updateHeaderForModule(){
 }
 
 async function setModule(mod){
+  if(mod==="lif"&&!lifAllowed()) return;
   currentModule=mod;
   DB={items:[],pos:[],mros:[],bosPackages:[]};
   tab="dashboard";
@@ -583,6 +585,9 @@ const HOME_WS=[
     {ic:"⚡",nm:"Energy Usage Survey",ds:"Resident appliances & time of use, load profile & system sizing",href:"pawahauz-survey.html"},
     {ic:"💹",nm:"Financial Model",ds:"CAPEX, OPEX, tariff, LCOE, payback & IRR simulator for EaaS systems",href:"pawahauz-finance.html"}]}
 ];
+// LIF Project Manager is only shown to the LIF team (list lives in lif-access.js)
+function lifAllowed(){return !!(USER&&window.KiruLif&&KiruLif.allowed(USER.email));}
+function homeWs(){return HOME_WS.filter(ws=>ws.module!=="lif"||lifAllowed());}
 const RECENT_KEY="kiru_recent_tools_v1";
 function recentGet(){try{return JSON.parse(localStorage.getItem(RECENT_KEY)||"[]");}catch(e){return [];}}
 function recentAdd(id){try{const r=[id].concat(recentGet().filter(x=>x!==id)).slice(0,5);localStorage.setItem(RECENT_KEY,JSON.stringify(r));}catch(e){}}
@@ -599,7 +604,7 @@ function viewHome(){
   const first=displayName(USER,true);
   const h=new Date().getHours(), greet=h<12?"Good morning":h<17?"Good afternoon":"Good evening";
   const today=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"});
-  const byId={}; HOME_WS.forEach(ws=>ws.tools.forEach(t=>{ if(!byId[ws.id+"|"+t.nm]) byId[ws.id+"|"+t.nm]={ws,t}; }));
+  const byId={}; homeWs().forEach(ws=>ws.tools.forEach(t=>{ if(!byId[ws.id+"|"+t.nm]) byId[ws.id+"|"+t.nm]={ws,t}; }));
   const recent=recentGet().filter(id=>byId[id]).map(id=>homeToolEl(byId[id].ws,byId[id].t,true)).join("");
   $("view").innerHTML=`
   <div class="hm">
@@ -615,7 +620,7 @@ function viewHome(){
     </div>
     ${recent?`<div class="recent" id="recentBox"><div class="sect-label">Recently used</div><div class="chips">${recent}</div></div>`:""}
     <div id="wsList">
-    ${HOME_WS.map(ws=>`
+    ${homeWs().map(ws=>`
       <section class="ws ${ws.cls}" data-ws>
         <div class="ws-head"><div><h2>${esc(ws.title)}</h2><p>${esc(ws.desc)}</p></div><span class="ws-count">${ws.tools.length} ${ws.tools.length===1?"tool":"tools"}</span></div>
         <div class="tiles">${ws.tools.map(t=>homeToolEl(ws,t,false)).join("")}</div>

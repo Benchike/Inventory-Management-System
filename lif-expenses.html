@@ -247,6 +247,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/idle-timeout.js"></script>
+<script src="/lif-access.js"></script>
 <script src="/autosuggest.js" defer></script>
 <script>
 window.KIRU_CONFIG = {
@@ -549,6 +550,7 @@ async function initApp(){
   if(!cfgOK()||!window.supabase){ setSyncBanner("This tool is not configured yet.",false); render(); return; }
   SB=window.supabase.createClient(window.KIRU_CONFIG.SUPABASE_URL, window.KIRU_CONFIG.SUPABASE_ANON_KEY);
   const {data:{session}}=await SB.auth.getSession();
+  if(session && window.KiruLif && !KiruLif.allowed(session.user.email)){ KiruLif.block(); return; }
   if(!session){
     setSyncBanner("Not signed in — sign in from the main Kiru app in another tab, then reload this page to view and record expenses.", false);
     render();

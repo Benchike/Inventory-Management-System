@@ -9,6 +9,18 @@
 -- ============================================================
 
 -- ============================================================
+-- LIF ACCESS — only the LIF team can read or change lif_* tables.
+-- Keep this list in step with lif-access.js.
+-- ============================================================
+create or replace function public.is_lif_member()
+returns boolean language sql stable as $
+  select lower(coalesce(auth.jwt() ->> 'email', '')) in (
+    'benokpala@ourkiru.com',
+    'cole@ourkiru.com'
+  );
+$;
+
+-- ============================================================
 -- COMPANY INVENTORY
 -- ============================================================
 
@@ -482,7 +494,7 @@ create table if not exists public.lif_bos_packages (
 
 alter table public.lif_bos_packages enable row level security;
 drop policy if exists lif_bos_packages_rw on public.lif_bos_packages;
-create policy lif_bos_packages_rw on public.lif_bos_packages for all to authenticated using (true) with check (true);
+create policy lif_bos_packages_rw on public.lif_bos_packages for all to authenticated using (public.is_lif_member()) with check (public.is_lif_member());
 
 do $$ begin
   if not exists (
@@ -528,7 +540,7 @@ create index if not exists lif_deployment_costs_sort_idx on public.lif_deploymen
 
 alter table public.lif_deployment_costs enable row level security;
 drop policy if exists lif_deployment_costs_rw on public.lif_deployment_costs;
-create policy lif_deployment_costs_rw on public.lif_deployment_costs for all to authenticated using (true) with check (true);
+create policy lif_deployment_costs_rw on public.lif_deployment_costs for all to authenticated using (public.is_lif_member()) with check (public.is_lif_member());
 
 do $$ begin
   if not exists (
@@ -571,7 +583,7 @@ create index if not exists lif_phase1_installations_sort_idx on public.lif_phase
 
 alter table public.lif_phase1_installations enable row level security;
 drop policy if exists lif_phase1_installations_rw on public.lif_phase1_installations;
-create policy lif_phase1_installations_rw on public.lif_phase1_installations for all to authenticated using (true) with check (true);
+create policy lif_phase1_installations_rw on public.lif_phase1_installations for all to authenticated using (public.is_lif_member()) with check (public.is_lif_member());
 
 do $$ begin
   if not exists (
@@ -595,7 +607,7 @@ create table if not exists public.lif_report_meta (
 
 alter table public.lif_report_meta enable row level security;
 drop policy if exists lif_report_meta_rw on public.lif_report_meta;
-create policy lif_report_meta_rw on public.lif_report_meta for all to authenticated using (true) with check (true);
+create policy lif_report_meta_rw on public.lif_report_meta for all to authenticated using (public.is_lif_member()) with check (public.is_lif_member());
 
 do $$ begin
   if not exists (
@@ -630,7 +642,7 @@ create index if not exists lif_timesheet_entries_date_idx on public.lif_timeshee
 
 alter table public.lif_timesheet_entries enable row level security;
 drop policy if exists lif_timesheet_entries_rw on public.lif_timesheet_entries;
-create policy lif_timesheet_entries_rw on public.lif_timesheet_entries for all to authenticated using (true) with check (true);
+create policy lif_timesheet_entries_rw on public.lif_timesheet_entries for all to authenticated using (public.is_lif_member()) with check (public.is_lif_member());
 
 do $$ begin
   if not exists (
@@ -700,8 +712,8 @@ alter table public.lif_expenses          enable row level security;
 alter table public.lif_expense_counters  enable row level security;
 drop policy if exists lif_expenses_rw         on public.lif_expenses;
 drop policy if exists lif_expense_counters_r  on public.lif_expense_counters;
-create policy lif_expenses_rw         on public.lif_expenses          for all    to authenticated using (true) with check (true);
-create policy lif_expense_counters_r  on public.lif_expense_counters  for select to authenticated using (true);
+create policy lif_expenses_rw         on public.lif_expenses          for all    to authenticated using (public.is_lif_member()) with check (public.is_lif_member());
+create policy lif_expense_counters_r  on public.lif_expense_counters  for select to authenticated using (public.is_lif_member());
 
 do $$ begin
   if not exists (
@@ -913,9 +925,9 @@ drop policy if exists lif_counters_r    on public.lif_counters;
 create policy items_rw          on public.items          for all to authenticated using (true) with check (true);
 create policy documents_rw      on public.documents      for all to authenticated using (true) with check (true);
 create policy counters_r        on public.counters        for select to authenticated using (true);
-create policy lif_items_rw      on public.lif_items      for all to authenticated using (true) with check (true);
-create policy lif_documents_rw  on public.lif_documents  for all to authenticated using (true) with check (true);
-create policy lif_counters_r    on public.lif_counters    for select to authenticated using (true);
+create policy lif_items_rw      on public.lif_items      for all to authenticated using (public.is_lif_member()) with check (public.is_lif_member());
+create policy lif_documents_rw  on public.lif_documents  for all to authenticated using (public.is_lif_member()) with check (public.is_lif_member());
+create policy lif_counters_r    on public.lif_counters    for select to authenticated using (public.is_lif_member());
 
 -- ============================================================
 -- REALTIME
@@ -1180,8 +1192,8 @@ alter table public.lif_intl_invoices          enable row level security;
 alter table public.lif_intl_invoice_counters  enable row level security;
 drop policy if exists lif_intl_invoices_rw          on public.lif_intl_invoices;
 drop policy if exists lif_intl_invoice_counters_r   on public.lif_intl_invoice_counters;
-create policy lif_intl_invoices_rw          on public.lif_intl_invoices          for all    to authenticated using (true) with check (true);
-create policy lif_intl_invoice_counters_r   on public.lif_intl_invoice_counters  for select to authenticated using (true);
+create policy lif_intl_invoices_rw          on public.lif_intl_invoices          for all    to authenticated using (public.is_lif_member()) with check (public.is_lif_member());
+create policy lif_intl_invoice_counters_r   on public.lif_intl_invoice_counters  for select to authenticated using (public.is_lif_member());
 
 do $$ begin
   if not exists (
