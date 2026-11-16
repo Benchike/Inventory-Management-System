@@ -222,7 +222,7 @@ window.KIRU_CONFIG = {
   SUPABASE_URL: "https://mfthkjtoggofjjmwyekt.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_la6NVRk4WPj5e4FDNB_rMQ_ArsAf3jV",
   ALLOWED_DOMAIN: "ourkiru.com",
-  TEAM_ACCESS_CODE: "KIRU-STORES-2026",
+  TEAM_ACCESS_CODE: "KIRU-2JEC-6WMS",
   ADMIN_EMAIL: "benokpala@ourkiru.com"
 };
 </script>
@@ -740,7 +740,7 @@ function showAuthLinkError(){
 async function signUp(){
   const cfg=window.KIRU_CONFIG||{};
   const allowedDomain=(cfg.ALLOWED_DOMAIN||"ourkiru.com").toLowerCase();
-  const correctCode=(cfg.TEAM_ACCESS_CODE||"KIRU-STORES-2026");
+  const correctCode=(cfg.TEAM_ACCESS_CODE||"KIRU-2JEC-6WMS");
   const email=$("su_email").value.trim().toLowerCase();
   const pass=$("su_pass").value;
   const pass2=$("su_pass2").value;
