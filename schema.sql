@@ -1503,3 +1503,8 @@ create table if not exists public.pawahauz_finance_scenarios (
 alter table public.pawahauz_finance_scenarios enable row level security;
 drop policy if exists pwf_scenarios_rw on public.pawahauz_finance_scenarios;
 create policy pwf_scenarios_rw on public.pawahauz_finance_scenarios for all to authenticated using (true) with check (true);
+
+-- Component warranties shown on the invoice (years, or free text such as '10 years')
+alter table public.invoices add column if not exists panel_warranty text default '';
+alter table public.invoices add column if not exists inv_warranty   text default '';
+alter table public.invoices add column if not exists batt_warranty  text default '';
