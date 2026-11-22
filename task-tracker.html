@@ -165,6 +165,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/idle-timeout.js"></script>
+<script src="/task-alerts.js"></script>
 <script src="/autosuggest.js" defer></script>
 <script>
 window.KIRU_CONFIG = {
@@ -196,6 +197,14 @@ const STATUSES=["To Do","In Progress","Done"];
 const STATUS_KEY={"To Do":"todo","In Progress":"inprogress","Done":"done"};
 let tasks=[], editingId=null, dragId=null;
 let ME=null, members=[], IS_ASSIGNER=false, MIGRATED=false, view="mine";
+/* after an idle sign-out, put the open task editor (and what was typed) back */
+if(window.KiruResume){
+  KiruResume.manual=true;
+  KiruResume.hook={
+    get:()=>({open:$("modalBg").classList.contains("show"),id:editingId}),
+    set:o=>{ if(o&&o.open) openModal(o.id&&tasks.find(x=>x.id===o.id)?o.id:null); }
+  };
+}
 
 /* ---- people ---- */
 const nameOf=m=>m?((m.full_name||"").trim()||(m.email||"").split("@")[0]):"";
@@ -372,6 +381,8 @@ $("modalSave").addEventListener("click",async()=>{
     const aid=$("fAssignee").value||null;
     row.assignee_id=aid;
     row.assignee=aid?nameOf(memberById(aid)):"";
+    // a task given to someone else stays "unseen" for them until they acknowledge it
+    if(!cur||cur.assignee_id!==aid) row.assign_ack_at=(aid&&aid!==ME.id)?null:now;
   }
   if(editingId){
     const {error}=await SB.from("tasks").update(row).eq("id",editingId);
@@ -431,6 +442,8 @@ async function initApp(){
   synced=true;
   await pull();
   subscribeLive();
+  if(window.KiruResume) KiruResume.restore();
+  if(MIGRATED&&window.KiruTaskAlerts) KiruTaskAlerts.start(SB,{id:ME.id});
 }
 initApp();
 </script>

@@ -167,6 +167,14 @@ function setSyncBanner(msg,ok){
 }
 
 let SB=null, synced=false, notes=[], filter="active", editingId=null;
+/* after an idle sign-out, put the open note editor (and what was typed) back */
+if(window.KiruResume){
+  KiruResume.manual=true;
+  KiruResume.hook={
+    get:()=>({open:$("modalBg").classList.contains("show"),id:editingId}),
+    set:o=>{ if(o&&o.open) openModal(o.id&&notes.find(x=>x.id===o.id)?o.id:null); }
+  };
+}
 const FILTERS=[["active","Active"],["reminders","With reminders"],["overdue","Overdue"],["done","Done"],["all","All"]];
 
 /* ---------- dates ---------- */
@@ -323,6 +331,7 @@ async function initApp(){
   if(!session){ setSyncBanner("Not signed in — sign in from the main Kiru app in another tab, then reload this page to use your notes.",false); return; }
   synced=true;
   await pull();
+  if(window.KiruResume) KiruResume.restore();
   if(window.KiruReminders) KiruReminders.start(SB,{onChange:pull});
   setInterval(render,60000);   // keep "overdue" labels current
 }

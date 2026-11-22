@@ -69,6 +69,15 @@ grant execute on function public.can_assign_tasks() to authenticated;
 -- 3) Tasks: who made it and who it is for
 alter table public.tasks add column if not exists assignee_id   uuid references auth.users(id) on delete set null;
 alter table public.tasks add column if not exists created_by_id uuid default auth.uid() references auth.users(id) on delete set null;
+-- assign_ack_at: when the assignee acknowledged a task given to them (null = still new: shows the bell + pop-up alarm).
+-- Tasks that already exist when this column is first added count as acknowledged.
+do $$ begin
+  if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='tasks' and column_name='assign_ack_at') then
+    alter table public.tasks add column assign_ack_at timestamptz;
+    update public.tasks set assign_ack_at = now();
+  end if;
+end $$;
+
 create index if not exists tasks_assignee_idx on public.tasks (assignee_id);
 create index if not exists tasks_creator_idx  on public.tasks (created_by_id);
 
