@@ -25,11 +25,12 @@ create policy team_members_read on public.team_members for select to authenticat
 create or replace function public.sync_team_member() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.team_members (user_id, email, full_name)
+  insert into public.team_members (user_id, email, full_name, can_assign)
   values (
     new.id, coalesce(new.email, ''),
     coalesce(nullif(trim(coalesce(new.raw_user_meta_data->>'first_name','') || ' ' || coalesce(new.raw_user_meta_data->>'last_name','')), ''),
-             new.raw_user_meta_data->>'full_name', '')
+             new.raw_user_meta_data->>'full_name', ''),
+    lower(coalesce(new.email,'')) in ('benokpala@ourkiru.com','cole@ourkiru.com','joseph.alleh@ourkiru.com')
   )
   on conflict (user_id) do update
     set email = excluded.email,
@@ -56,11 +57,8 @@ on conflict (user_id) do update
 update public.team_members set can_assign = true
 where lower(email) in ('benokpala@ourkiru.com', 'cole@ourkiru.com');
 
--- Joseph Alleh: matched on the account's name / email on THIS run only.
--- If his account does not show below, add him later with:
---   update public.team_members set can_assign = true where lower(email) = '<his email>';
-update public.team_members set can_assign = true
-where lower(full_name) like 'joseph%alleh%' or lower(email) like 'joseph%alleh%@ourkiru.com' or lower(email) = 'joseph@ourkiru.com';
+-- Joseph Alleh
+update public.team_members set can_assign = true where lower(email) = 'joseph.alleh@ourkiru.com';
 
 create or replace function public.can_assign_tasks() returns boolean
 language sql stable security definer set search_path = public as $$
