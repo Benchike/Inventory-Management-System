@@ -862,7 +862,7 @@ if(window.KiruResume){
 
 let addItems=[{desc:"Installation, wiring & BOS",qty:1,price:0}];
 // every BOS accessory / other item carries the same fixed warranty; major components have their own
-const BOS_WARRANTY="12 months";
+const BOS_WARRANTY="12 mos";
 function warrTxt(id){
   const v=(val(id)||"").trim();
   if(!v) return "";
@@ -948,7 +948,7 @@ function calcImperium(){
   lines.forEach(l=>{
     const amt=l.lot?(l.price||0):(l.qty||0)*(l.price||0);
     total+=amt;
-    body+=`<tr><td><span class="d">${esc(l.d)}</span></td><td>${l.cap}</td><td>${l.qty||0}</td><td>${l.warr||"—"}</td><td>${l.price?ngn.format(l.price):"—"}</td><td>${amt?ngn.format(amt):"—"}</td></tr>`;
+    body+=`<tr><td><span class="d">${esc(l.d)}</span></td><td>${l.cap}</td><td>${l.qty||0}</td><td style="white-space:nowrap">${l.warr||"—"}</td><td>${l.price?ngn.format(l.price):"—"}</td><td>${amt?ngn.format(amt):"—"}</td></tr>`;
   });
   $("im_items").innerHTML=body;
   grandTotal=total;
@@ -1033,7 +1033,7 @@ function calc(){
   lines.forEach(l=>{
     const amt = l.lot ? (l.price||0) : (l.qty||0)*(l.price||0);
     total+=amt;
-    body+=`<tr><td><span class="d">${esc(l.d)}</span></td><td>${l.cap}</td><td>${l.qty||0}</td><td>${l.warr||"—"}</td><td>${l.price?ngn.format(l.price):"—"}</td><td>${amt?ngn.format(amt):"—"}</td></tr>`;
+    body+=`<tr><td><span class="d">${esc(l.d)}</span></td><td>${l.cap}</td><td>${l.qty||0}</td><td style="white-space:nowrap">${l.warr||"—"}</td><td>${l.price?ngn.format(l.price):"—"}</td><td>${amt?ngn.format(amt):"—"}</td></tr>`;
   });
   $("pv_items").innerHTML=body;
   grandTotal=total;
