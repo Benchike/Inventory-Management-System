@@ -660,16 +660,40 @@ async function writeInvoiceRow(row){
   if(curId) return await SB.from("invoices").update(row).eq("id",curId);
   return await SB.from("invoices").insert(row).select("id").single();
 }
+/* Only one save runs at a time (a double-click, or autosave + Save draft + Issue, used to fire two inserts
+   with the same invoice number -> "duplicate key ... invoices_inv_no_key"). A save requested meanwhile runs right after. */
+let saving=null, saveAgain=false;
 async function saveDraft(){
   if(!synced) return;
+  if(saving){ saveAgain=true; return saving; }
+  saving=(async()=>{
+    try{ do{ saveAgain=false; await saveDraftOnce(); }while(saveAgain); }
+    finally{ saving=null; }
+  })();
+  return saving;
+}
+const isDupNo=e=>!!e && (e.code==="23505" || /duplicate key/i.test(e.message||"")) && /inv_no/.test(e.message||"");
+async function saveDraftOnce(){
   const row=formToRow(); row.status="draft";
+  if(!curId) row.created_by=currentUserEmail;
   if(warrColsMissing) stripWarrCols(row);
   let {data,error}=await writeInvoiceRow(row);
+  // that invoice number is already used by another saved invoice: take the next free number and save under it
+  for(let n=0; n<3 && isDupNo(error) && !curId; n++){
+    const old=row.inv_no;
+    row.inv_no=await genNoRemote();
+    $("invNo").value=row.inv_no; calc();
+    ({data,error}=await writeInvoiceRow(row));
+    if(!error) setSyncBanner("Invoice number "+old+" was already taken by another saved invoice, so this one was saved as "+row.inv_no+".",false);
+  }
   // database not migrated yet (add_invoice_warranty.sql): save everything else
   if(error && /_warranty/.test(error.message||"")){
     warrColsMissing=true; stripWarrCols(row);
     ({data,error}=await writeInvoiceRow(row));
     if(!error) setSyncBanner("Draft saved, but the component warranties are not being stored yet — run add_invoice_warranty.sql in Supabase.",false);
+  }
+  if(isDupNo(error)){   // editing a saved invoice whose number was changed to one that exists
+    alert("That invoice number is already used by another invoice. Please click \"New\" next to the number to get a fresh one, then save again."); return;
   }
   if(error){ console.error("save error",error); alert("Could not save draft: "+error.message); return; }
   if(!curId && data) curId=data.id;
@@ -825,6 +849,15 @@ async function initApp(){
   currentUserEmail=(session.user&&session.user.email)||"";
   await loadHistory();
   await newInvoice();
+  if(window.KiruResume) KiruResume.restore();   // after an idle sign-out: put the invoice back as it was
+}
+/* resume after idle sign-out: remember which saved invoice is open (so saving updates it instead of creating a duplicate) and the extra item rows */
+if(window.KiruResume){
+  KiruResume.manual=true;
+  KiruResume.hook={
+    get:()=>({curId,curStatus,addItems}),
+    set:o=>{ if(!o) return; curId=o.curId||null; curStatus=o.curStatus||"new"; if(Array.isArray(o.addItems)) addItems=o.addItems; renderAdd(); applyLock(); }
+  };
 }
 
 let addItems=[{desc:"Installation, wiring & BOS",qty:1,price:0}];
