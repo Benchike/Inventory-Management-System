@@ -1,4 +1,4 @@
-/* Kiru auto sign-out after 10 minutes of inactivity  +  "pick up where you left off".
+/* Kiru auto sign-out after 30 minutes of inactivity  +  "pick up where you left off".
    Shared by every page. Activity on any open Kiru tab counts, because the last-activity
    time lives in localStorage (same origin as the Supabase session).
 
@@ -11,7 +11,7 @@
      KiruResume.hook = { get: fn()->object, set: fn(object) };   // extra state, e.g. which editor is open
 */
 (function(){
-  var LIMIT = 10*60*1000;
+  var LIMIT = 30*60*1000;
   var WARN  = 60*1000;                 // show a countdown banner for the last minute
   var ENABLED = true;                  // master switch for auto sign-out
   var KEY = "kiru_last_activity";
